@@ -74,7 +74,7 @@ class BusinessBuyersClient(BrokerClient):
 
         self.page.click("button:has-text('Search'), input[value='Search']")
 
-        # canonical “results ready” signal
+        # canonical “results ready” signals
         self.page.wait_for_url("**/search-results/**", timeout=15000)
         self.page.wait_for_selector("text=Showing", timeout=15000)
         self.page.wait_for_timeout(800)
@@ -99,50 +99,64 @@ class BusinessBuyersClient(BrokerClient):
             miles="100",
         )
 
-        seen: set[str] = set()
         page_num = 1
         total = 0
+        seen = set()
 
         while True:
             print(f"Scraping page {page_num}")
 
-            self.page.wait_for_selector("text=Showing", timeout=15000)
-
-            cards = self.page.locator("text=REF:").locator("xpath=ancestor::a[1]")
+            cards = self.page.locator("a[href*='/business/']")
             count = cards.count()
 
             if count == 0:
+                print("⚠️ No listing links found, stopping pagination")
                 break
 
             for i in range(count):
                 href = cards.nth(i).get_attribute("href")
-                if not href or href in seen:
+                if not href:
                     continue
 
-                seen.add(href)
+                if href.startswith("/"):
+                    href = self.BASE_URL + href
+
+                listing_id = href.split("/business/")[-1].strip("/")
+
+                if listing_id in seen:
+                    continue
+
+                seen.add(listing_id)
 
                 self.repo.upsert_index_only(
                     source="BusinessBuyers",
-                    source_listing_id=href,
-                    source_url=self.BASE_URL + href,
+                    source_listing_id=listing_id,
+                    source_url=href,
                     sector="Healthcare",
                 )
 
                 total += 1
 
-            next_btn = self.page.locator("a:has-text('Next')")
-            if next_btn.count() == 0:
+            # ✅ pagination: ONLY real pagination next
+            next_link = self.page.locator(
+                "a.page-numbers.next, a[rel='next']"
+            )
+
+            if next_link.count() == 0:
+                print("No pagination Next link found, stopping")
                 break
 
-            classes = next_btn.first.get_attribute("class") or ""
-            if "disabled" in classes.lower():
-                break
+            current_url = self.page.url
 
-            next_btn.first.click()
+            next_link.first.click()
             self.page.wait_for_load_state("domcontentloaded")
             self.page.wait_for_timeout(800)
-
             self.ensure_cookies_cleared()
+
+            if self.page.url == current_url:
+                print("URL did not change after Next click, stopping")
+                break
+
             page_num += 1
 
         print(f"Indexed {total} unique listings")

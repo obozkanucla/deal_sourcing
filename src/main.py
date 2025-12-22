@@ -18,7 +18,7 @@ from config.settings import (
     PDF_DIR,
 )
 
-DB_PATH = Path("data/deals.sqlite")
+DB_PATH = Path("db/deals.sqlite")
 
 
 def main():

@@ -1,29 +1,40 @@
--- Deals table: one row per broker listing
+-- =========================================================
+-- DEALS (index + detail lifecycle)
+-- =========================================================
+
 CREATE TABLE IF NOT EXISTS deals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
+    -- Identity
     source TEXT NOT NULL,
     source_listing_id TEXT NOT NULL,
     source_url TEXT NOT NULL,
 
-    content_hash TEXT NOT NULL,
+    -- Index-level metadata
+    sector TEXT,
 
-    decision TEXT NOT NULL,
-    decision_confidence TEXT,
+    -- Detail-level analysis
+    content_hash TEXT,
+    decision TEXT,
+    decision_confidence REAL,
     reasons TEXT,
+    extracted_json TEXT,
 
-    extracted_json TEXT NOT NULL,
+    -- Lifecycle tracking
+    first_seen DATE,
+    last_seen DATE,
+    last_updated DATETIME,
 
-    first_seen DATE NOT NULL,
-    last_seen DATE NOT NULL,
-    last_updated TIMESTAMP NOT NULL,
-
+    -- Artifacts
     pdf_path TEXT,
 
     UNIQUE (source, source_listing_id)
 );
 
--- Daily click tracking (rate limit safety)
+-- =========================================================
+-- DAILY CLICK BUDGET TRACKING
+-- =========================================================
+
 CREATE TABLE IF NOT EXISTS daily_clicks (
     date DATE NOT NULL,
     broker TEXT NOT NULL,

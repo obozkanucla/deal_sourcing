@@ -5,12 +5,13 @@ from typing import Optional
 
 class SQLiteRepository:
     def __init__(self, db_path: Path):
-        self.db_path = db_path
-
-        # ✅ ENSURE DIRECTORY EXISTS
+        # ✅ force path relative to project root
+        project_root = Path(__file__).resolve().parents[2]
+        self.db_path = project_root / db_path
+        print("📀 SQLite DB path:", db_path.resolve())
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-
         self._init_db()
+
 
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -164,3 +165,31 @@ class SQLiteRepository:
                     now,
                 ),
             )
+
+    def get_pending_index_records(self, source: str):
+        """
+        Return index-only deals that have not yet been processed
+        (i.e. no content_hash yet).
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cur = conn.execute(
+                """
+                SELECT source,
+                       source_listing_id,
+                       source_url
+                FROM deals
+                WHERE source = ?
+                  AND content_hash IS NULL
+                ORDER BY first_seen
+                """,
+                (source,),
+            )
+
+            return [
+                {
+                    "source": row[0],
+                    "source_listing_id": row[1],
+                    "source_url": row[2],
+                }
+                for row in cur.fetchall()
+            ]
