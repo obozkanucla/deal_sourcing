@@ -1,0 +1,8 @@
+ebitda_min_gbp: 1000000
+
+target_industries:
+  - Homecare
+  - Mission-critical equipment servicing
+
+exclude_deal_types:
+  - Asset sale
