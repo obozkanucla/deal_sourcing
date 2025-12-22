@@ -1,44 +1,55 @@
-from playwright.sync_api import sync_playwright
-from src.brokers.base import BrokerClient
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from pathlib import Path
 from datetime import datetime
-from urllib.parse import urljoin
+
+from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+from src.brokers.base import BrokerClient
+from src.persistence.repository import SQLiteRepository
+
 
 class BusinessBuyersClient(BrokerClient):
-
     BASE_URL = "https://businessbuyers.co.uk"
 
-    def __init__(self, username, password, click_budget):
+    def __init__(self, username: str, password: str, click_budget):
         self.username = username
         self.password = password
         self.click_budget = click_budget
+
         self.browser = None
         self.page = None
 
+        self.repo = SQLiteRepository(Path("db/deals.sqlite"))
+
+    # ------------------------------------------------------------------
+    # AUTH
+    # ------------------------------------------------------------------
+
     def login(self):
         p = sync_playwright().start()
-        self.browser = p.chromium.launch(headless=False, slow_mo=400)
-        self.page = self.browser.new_page()
 
-        # Load login page
+        self.browser = p.chromium.launch(
+            headless=False,
+            slow_mo=400,
+        )
+
+        context = self.browser.new_context()
+        context.grant_permissions([], origin=self.BASE_URL)
+
+        self.page = context.new_page()
+
         self.page.goto(f"{self.BASE_URL}/login")
         self.page.wait_for_load_state("domcontentloaded")
 
-        # ABSOLUTE RULE: clear cookies first
         self.ensure_cookies_cleared()
 
-        # Now and only now touch the form
         self.page.fill("input[name='log']", self.username)
         self.page.fill("input[name='pwd']", self.password)
-
-        # Click login explicitly (do NOT rely on Enter)
         self.page.click("#wp-submit")
 
-        # Wait for navigation
         self.page.wait_for_load_state("networkidle")
         self.page.wait_for_timeout(1000)
 
-        # BB may re-inject cookies post-login
         self.ensure_cookies_cleared()
 
         if "login" in self.page.url.lower():
@@ -46,68 +57,101 @@ class BusinessBuyersClient(BrokerClient):
 
         print("Login successful:", self.page.url)
 
-    def apply_sector_filter(self, sector_name: str):
-        # Native <select> → use select_option
-        self.page.select_option(
-            "select",
-            label=sector_name
-        )
+    # ------------------------------------------------------------------
+    # SEARCH / INDEX
+    # ------------------------------------------------------------------
 
-        # Click Search
+    def apply_search_filters(
+        self,
+        *,
+        sector: str,
+        postcode: str = "W14 8EN",
+        miles: str = "100",
+    ):
+        self.page.select_option("select", label=sector)
+        self.page.locator("input[placeholder*='Postcode']").fill(postcode)
+        self.page.select_option("#gmw_distance", label=miles)
+
         self.page.click("button:has-text('Search'), input[value='Search']")
 
-        # ✅ WAIT FOR RESULTS GRID TO UPDATE (DOM-based)
-        self.page.wait_for_selector(
-            f"text={sector_name}",
-            timeout=10000
-        )
-
-        # Extra safety
-        self.page.wait_for_timeout(1000)
+        # canonical “results ready” signal
+        self.page.wait_for_url("**/search-results/**", timeout=15000)
+        self.page.wait_for_selector("text=Showing", timeout=15000)
+        self.page.wait_for_timeout(800)
 
         self.ensure_cookies_cleared()
 
-        print(f"Applied sector filter and refreshed results: {sector_name}")
+        print(
+            f"Applied search filters: sector={sector}, "
+            f"postcode={postcode}, miles={miles}"
+        )
 
     def fetch_index_listings(self):
         self.ensure_cookies_cleared()
 
-        # Navigate to listings page
         self.page.click("a:has-text('Buy a business')")
-        self.page.wait_for_load_state("networkidle")
-        self.page.wait_for_timeout(1500)
-
+        self.page.wait_for_load_state("domcontentloaded")
         self.ensure_cookies_cleared()
 
-        # ✅ Apply Healthcare filter
-        self.apply_sector_filter("Healthcare")
+        self.apply_search_filters(
+            sector="Healthcare",
+            postcode="W14 8EN",
+            miles="100",
+        )
 
-        print("On filtered listings page:", self.page.url)
+        seen: set[str] = set()
+        page_num = 1
+        total = 0
 
-        cards = self.page.locator('a[href^="/business/"]')
-        count = cards.count()
+        while True:
+            print(f"Scraping page {page_num}")
 
-        print(f"Found {count} Healthcare listings")
+            self.page.wait_for_selector("text=Showing", timeout=15000)
 
-        listings = []
+            cards = self.page.locator("text=REF:").locator("xpath=ancestor::a[1]")
+            count = cards.count()
 
-        for i in range(count):
-            card = cards.nth(i)
-            href = card.get_attribute("href")
-            if not href:
-                continue
+            if count == 0:
+                break
 
-            listings.append({
-                "source": "BusinessBuyers",
-                "sector": "Healthcare",
-                "source_listing_id": href,
-                "source_url": self.BASE_URL + href,
-                "raw_text": card.inner_text().strip(),
-            })
+            for i in range(count):
+                href = cards.nth(i).get_attribute("href")
+                if not href or href in seen:
+                    continue
 
-        return listings
+                seen.add(href)
 
-    def fetch_listing_detail(self, listing):
+                self.repo.upsert_index_only(
+                    source="BusinessBuyers",
+                    source_listing_id=href,
+                    source_url=self.BASE_URL + href,
+                    sector="Healthcare",
+                )
+
+                total += 1
+
+            next_btn = self.page.locator("a:has-text('Next')")
+            if next_btn.count() == 0:
+                break
+
+            classes = next_btn.first.get_attribute("class") or ""
+            if "disabled" in classes.lower():
+                break
+
+            next_btn.first.click()
+            self.page.wait_for_load_state("domcontentloaded")
+            self.page.wait_for_timeout(800)
+
+            self.ensure_cookies_cleared()
+            page_num += 1
+
+        print(f"Indexed {total} unique listings")
+
+    # ------------------------------------------------------------------
+    # DETAIL
+    # ------------------------------------------------------------------
+
+    def fetch_listing_detail(self, listing: dict) -> str:
         self.click_budget.consume()
 
         self.page.goto(listing["source_url"])
@@ -115,24 +159,24 @@ class BusinessBuyersClient(BrokerClient):
 
         return self.page.content()
 
+    # ------------------------------------------------------------------
+    # UTIL
+    # ------------------------------------------------------------------
+
     def ensure_cookies_cleared(self):
         try:
-            # Wait briefly for any consent UI to appear
-            self.page.wait_for_timeout(1000)
+            self.page.wait_for_timeout(800)
 
             accept_buttons = self.page.get_by_role(
-                "button", name="Accept All"
+                "button",
+                name="Accept All",
             )
 
-            count = accept_buttons.count()
-            if count == 0:
-                return  # no cookie banner
+            if accept_buttons.count() == 0:
+                return
 
-            # Click the FIRST visible Accept All button
             accept_buttons.first.click(force=True)
-
-            # Give JS time to process consent
-            self.page.wait_for_timeout(1000)
+            self.page.wait_for_timeout(800)
 
             print("Cookie consent accepted.")
 

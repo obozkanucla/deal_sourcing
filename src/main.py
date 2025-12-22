@@ -9,7 +9,7 @@ from extraction.html_cleaner import extract_clean_text
 from extraction.pdf_snapshot import save_pdf
 from decisioning.llm_classifier import classify_listing
 from decisioning.rules import apply_hard_rules
-from persistence.repository import SQLiteRepository
+from src.persistence.repository import SQLiteRepository
 
 from config.settings import (
     BB_USERNAME,
@@ -36,7 +36,8 @@ def main():
     )
 
     client.login()
-    listings = client.fetch_index_listings()
+    client.fetch_index_listings()
+    listings = repo.get_pending_index_records("BusinessBuyers")
 
     for listing in listings:
         source = "BusinessBuyers"

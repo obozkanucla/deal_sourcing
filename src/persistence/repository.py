@@ -1,11 +1,15 @@
 import sqlite3
 from pathlib import Path
 from datetime import datetime, date
-
+from typing import Optional
 
 class SQLiteRepository:
     def __init__(self, db_path: Path):
         self.db_path = db_path
+
+        # ✅ ENSURE DIRECTORY EXISTS
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
         self._init_db()
 
     def _init_db(self):
@@ -122,4 +126,41 @@ class SQLiteRepository:
                 DO UPDATE SET clicks_used = clicks_used + 1
                 """,
                 (day.isoformat(), broker),
+            )
+
+    def upsert_index_only(
+            self,
+            *,
+            source: str,
+            source_listing_id: str,
+            source_url: str,
+            sector: Optional[str] = None,
+    ):
+        now = datetime.utcnow().isoformat()
+        today = date.today().isoformat()
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO deals (source,
+                                   source_listing_id,
+                                   source_url,
+                                   sector,
+                                   first_seen,
+                                   last_seen,
+                                   last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source, source_listing_id) DO
+                UPDATE SET
+                    last_seen = excluded.last_seen,
+                    last_updated = excluded.last_updated
+                """,
+                (
+                    source,
+                    source_listing_id,
+                    source_url,
+                    sector,
+                    today,
+                    today,
+                    now,
+                ),
             )
