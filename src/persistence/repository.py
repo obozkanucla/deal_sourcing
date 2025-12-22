@@ -18,6 +18,11 @@ class SQLiteRepository:
             with open(Path(__file__).parent / "schema.sql") as f:
                 conn.executescript(f.read())
 
+    def get_conn(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row   # ✅ THIS IS THE KEY LINE
+        return conn
+
     # ---------- DEALS ----------
 
     def deal_exists(self, source: str, listing_id: str) -> bool:
@@ -193,3 +198,88 @@ class SQLiteRepository:
                 }
                 for row in cur.fetchall()
             ]
+
+    def fetch_all_deals(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+
+        rows = conn.execute(
+            """
+            SELECT deal_id,
+                   source,
+                   source_listing_id,
+                   source_url,
+                   sector,
+                   decision,
+                   decision_confidence,
+                   first_seen,
+                   last_seen,
+                   last_updated
+            FROM deals
+            ORDER BY first_seen ASC
+            """
+        ).fetchall()
+
+        conn.close()
+        return [dict(row) for row in rows]
+
+    def update_human_fields(
+            self,
+            deal_id: str,
+            status: str = None,
+            owner: str = None,
+            priority: str = None,
+            notes: str = None,
+            last_touch: str = None,
+            manual_decision: str = None,
+    ):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET status          = COALESCE(?, status),
+                    owner           = COALESCE(?, owner),
+                    priority        = COALESCE(?, priority),
+                    notes           = COALESCE(?, notes),
+                    last_touch      = COALESCE(?, last_touch),
+                    manual_decision = COALESCE(?, manual_decision),
+                    last_updated    = CURRENT_TIMESTAMP
+                WHERE deal_id = ?
+                """,
+                (
+                    status,
+                    owner,
+                    priority,
+                    notes,
+                    last_touch,
+                    manual_decision,
+                    deal_id,
+                ),
+            )
+
+    def update_deal_fields(self, deal_id: str, fields: dict):
+        if not fields:
+            return
+
+        assignments = ", ".join([f"{k} = ?" for k in fields.keys()])
+        values = list(fields.values()) + [deal_id]
+
+        sql = f"""
+            UPDATE deals
+            SET {assignments},
+                last_updated = CURRENT_TIMESTAMP
+            WHERE deal_id = ?
+        """
+
+        with self.get_conn() as conn:
+            conn.execute(sql, values)
+            conn.commit()
+
+    def fetch_by_deal_id(self, deal_id: str):
+        with self.get_conn() as conn:
+            cur = conn.execute(
+                "SELECT * FROM deals WHERE deal_id = ?",
+                (deal_id,)
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
