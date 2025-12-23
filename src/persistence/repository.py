@@ -357,3 +357,78 @@ class SQLiteRepository:
         with self.get_conn() as conn:
             conn.execute(sql, values)
             conn.commit()
+
+    def upsert_legacy_deal(self, deal: dict):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO deals (deal_id,
+                                   source,
+                                   source_url,
+                                   source_listing_id,
+                                   intermediary,
+                                   company_name,
+                                   industry,
+                                   sector,
+                                   sector_source,
+                                   location,
+                                   incorporation_year,
+                                   first_seen,
+                                   last_updated,
+                                   outcome,
+                                   outcome_reason,
+                                   notes,
+                                   revenue_k,
+                                   ebitda_k,
+                                   ebitda_margin,
+                                   asking_price_k,
+                                   revenue_multiple,
+                                   ebitda_multiple,
+                                   drive_folder_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(deal_id) DO
+                UPDATE SET
+                    intermediary = excluded.intermediary,
+                    company_name = excluded.company_name,
+                    industry = excluded.industry,
+                    sector = excluded.sector,
+                    sector_source = excluded.sector_source,
+                    location = excluded.location,
+                    incorporation_year = excluded.incorporation_year,
+                    last_updated = excluded.last_updated,
+                    outcome = excluded.outcome,
+                    outcome_reason = excluded.outcome_reason,
+                    notes = excluded.notes,
+                    revenue_k = excluded.revenue_k,
+                    ebitda_k = excluded.ebitda_k,
+                    ebitda_margin = excluded.ebitda_margin,
+                    asking_price_k = excluded.asking_price_k,
+                    revenue_multiple = excluded.revenue_multiple,
+                    ebitda_multiple = excluded.ebitda_multiple,
+                    drive_folder_url = excluded.drive_folder_url
+                """,
+                (
+                    deal["deal_id"],  # deal_id
+                    deal["source"],  # source ("LegacySheet")
+                    f"legacy://{deal['deal_id']}",  # source_url ✅ REQUIRED
+                    deal["deal_id"],  # source_listing_id ✅ REQUIRED
+                    deal["intermediary"],
+                    deal["company_name"],
+                    deal["industry"],
+                    deal["sector"],
+                    deal["sector_source"],  # "manual"
+                    deal["location"],
+                    deal["incorporation_year"],
+                    deal["first_seen"],
+                    deal["last_updated"],
+                    deal["outcome"],
+                    deal["outcome_reason"],
+                    deal["notes"],
+                    deal["revenue_k"],
+                    deal["ebitda_k"],
+                    deal["ebitda_margin"],
+                    deal["asking_price_k"],
+                    deal["revenue_multiple"],
+                    deal["ebitda_multiple"],
+                    deal["drive_folder_url"],
+                ),
+            )
