@@ -432,3 +432,51 @@ class SQLiteRepository:
                     deal["drive_folder_url"],
                 ),
             )
+
+    def upsert_intermediary(self, rec: dict):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO intermediaries (intermediary_id,
+                                            name,
+                                            website,
+                                            last_checked,
+                                            existing_relationship,
+                                            relationship_owner,
+                                            active,
+                                            sector_focus,
+                                            geography,
+                                            category,
+                                            notes,
+                                            description,
+                                            updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(intermediary_id) DO
+                UPDATE SET
+                    name = excluded.name,
+                    website = excluded.website,
+                    last_checked = excluded.last_checked,
+                    existing_relationship = excluded.existing_relationship,
+                    relationship_owner = excluded.relationship_owner,
+                    active = excluded.active,
+                    sector_focus = excluded.sector_focus,
+                    geography = excluded.geography,
+                    category = excluded.category,
+                    notes = excluded.notes,
+                    description = excluded.description,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (
+                    rec["intermediary_id"],
+                    rec["name"],
+                    rec["website"],
+                    rec["last_checked"],
+                    rec["existing_relationship"],
+                    rec["relationship_owner"],
+                    rec["active"],
+                    rec["sector_focus"],
+                    rec["geography"],
+                    rec["category"],
+                    rec["notes"],
+                    rec["description"],
+                ),
+            )
