@@ -17,6 +17,7 @@ SHEET_COLUMNS = [
     "last_updated",
     "decision",
     "decision_confidence",
+    "pdf_link",
 ]
 
 
@@ -53,6 +54,11 @@ def row_from_deal(deal: dict) -> list:
         deal.get("last_updated"),
         deal.get("decision"),
         deal.get("decision_confidence"),
+        (
+            f'=HYPERLINK("{deal["drive_folder_url"]}", "Folder")'
+            if deal.get("drive_folder_url")
+            else ""
+        ),
     ]
 
 
@@ -82,6 +88,7 @@ def push_sqlite_to_sheets(repo, ws):
         if deal["deal_id"] in existing:
             continue
         rows.append(row_from_deal(deal))
+
 
     print(f"🆕 {len(rows)} new deals to export")
 
@@ -138,3 +145,41 @@ def pull_sheets_to_sqlite(repo, worksheet):
             skipped += 1
 
     print(f"✅ Reverse sync complete — {updated} updated, {skipped} unchanged")
+
+def update_folder_links(repo, ws):
+    """
+    Update folder links for existing rows based on deal_id.
+    """
+    records = ws.get_all_records()
+    print(f"🔄 Checking {len(records)} existing rows for folder links")
+
+    updates = 0
+
+    for i, row in enumerate(records, start=2):  # row 1 = header
+        deal_id = row.get("deal_id")
+        if not deal_id:
+            continue
+
+        # Skip if already populated
+        if row.get("pdf_link"):
+            continue
+
+        deal = repo.fetch_by_deal_id(deal_id)
+        if not deal:
+            continue
+
+        folder_url = deal.get("drive_folder_url")
+        if not folder_url:
+            continue
+
+        ws.update_cell(
+            i,
+            SHEET_COLUMNS.index("pdf_link") + 1,
+            f'=HYPERLINK("{folder_url}", "Folder")',
+        )
+        updates += 1
+
+        if updates % 20 == 0:
+            time.sleep(1)  # avoid quota issues
+
+    print(f"✅ Updated {updates} folder links")

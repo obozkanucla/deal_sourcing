@@ -6,10 +6,17 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from src.brokers.base import BrokerClient
 from src.persistence.repository import SQLiteRepository
+from src.integrations.google_drive import upload_pdf_to_drive
 
+from src.integrations.google_auth import get_google_credentials
+from src.integrations.google_drive import get_drive_service
 
 class BusinessBuyersClient(BrokerClient):
     BASE_URL = "https://businessbuyers.co.uk"
+    PDF_TMP_DIR = Path("tmp_pdfs")
+    PDF_TMP_DIR.mkdir(exist_ok=True)
+
+    DRIVE_FOLDER_ID = "PUT_BUSINESSBUYERS_FOLDER_ID_HERE"
 
     def __init__(self, username: str, password: str, click_budget):
         self.username = username
@@ -20,6 +27,9 @@ class BusinessBuyersClient(BrokerClient):
         self.page = None
 
         self.repo = SQLiteRepository(Path("db/deals.sqlite"))
+
+        self.creds = get_google_credentials()
+        self.drive_service = get_drive_service(self.creds)
 
     # ------------------------------------------------------------------
     # AUTH
@@ -165,13 +175,44 @@ class BusinessBuyersClient(BrokerClient):
     # DETAIL
     # ------------------------------------------------------------------
 
-    def fetch_listing_detail(self, listing: dict) -> str:
+    from pathlib import Path
+    from datetime import datetime
+
+    def fetch_listing_detail_and_pdf(self, listing: dict, pdf_base_dir: Path):
         self.click_budget.consume()
 
-        self.page.goto(listing["source_url"])
-        self.page.wait_for_load_state("networkidle")
+        url = listing["source_url"]
+        deal_id = listing["deal_id"]
 
-        return self.page.content()
+        self.page.goto(url)
+        self.page.wait_for_load_state("networkidle")
+        self.ensure_cookies_cleared()
+
+        html = self.page.content()
+
+        # ---- PDF ----
+        pdf_dir = pdf_base_dir / listing["source"]
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+
+        pdf_path = pdf_dir / f"{deal_id}.pdf"
+
+        self.page.pdf(
+            path=str(pdf_path),
+            format="A4",
+            print_background=True,
+            margin={
+                "top": "20mm",
+                "bottom": "20mm",
+                "left": "15mm",
+                "right": "15mm",
+            },
+        )
+
+        return {
+            "raw_html": html,
+            "pdf_path": str(pdf_path),
+            "detail_fetched_at": datetime.utcnow().isoformat(),
+        }
 
     # ------------------------------------------------------------------
     # UTIL
@@ -196,3 +237,4 @@ class BusinessBuyersClient(BrokerClient):
 
         except PlaywrightTimeoutError:
             pass
+

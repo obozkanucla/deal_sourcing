@@ -6,7 +6,7 @@ import pickle
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = Path(__file__).resolve().parents[2]
 CREDS_PATH = BASE_DIR / "config/google/credentials.json"
 TOKEN_PATH = BASE_DIR / "config/google/token.pickle"
 

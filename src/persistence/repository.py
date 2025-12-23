@@ -18,6 +18,17 @@ class SQLiteRepository:
             with open(Path(__file__).parent / "schema.sql") as f:
                 conn.executescript(f.read())
 
+    def fetch_all(self, sql: str, params=()):
+        with self.get_conn() as conn:
+            cur = conn.execute(sql, params)
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
+
+    def execute(self, sql: str, params=()):
+        with self.get_conn() as conn:
+            conn.execute(sql, params)
+            conn.commit()
+
     def get_conn(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row   # ✅ THIS IS THE KEY LINE
@@ -214,7 +225,8 @@ class SQLiteRepository:
                    decision_confidence,
                    first_seen,
                    last_seen,
-                   last_updated
+                   last_updated,
+                   drive_folder_url
             FROM deals
             ORDER BY first_seen ASC
             """
@@ -283,3 +295,65 @@ class SQLiteRepository:
             )
             row = cur.fetchone()
             return dict(row) if row else None
+
+    def update_pdf_info(self, deal_id: str, pdf_path: str, pdf_drive_url: str):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET pdf_path      = ?,
+                    pdf_drive_url = ?,
+                    last_updated  = CURRENT_TIMESTAMP
+                WHERE deal_id = ?
+                """,
+                (pdf_path, pdf_drive_url, deal_id),
+            )
+
+    def fetch_deals_needing_details(self, limit: int):
+        return self.fetch_all(
+            """
+            SELECT *
+            FROM deals
+            WHERE source = 'BusinessBuyers'
+              AND (
+                content_hash IS NULL
+                    OR drive_folder_id IS NULL
+                    OR needs_detail_refresh = 1
+                )
+            ORDER BY last_seen DESC LIMIT ?
+            """,
+            (limit,),
+        )
+
+    def mark_detail_checked(self, deal_id: str, reason: str):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET detail_fetched_at    = CURRENT_TIMESTAMP,
+                    detail_fetch_reason  = ?,
+                    needs_detail_refresh = 0
+                WHERE deal_id = ?
+                """,
+                (reason, deal_id),
+            )
+
+    def update_detail_fields(self, deal_id: str, fields: dict):
+        if not fields:
+            return
+
+        fields["detail_fetched_at"] = datetime.utcnow().isoformat()
+        fields["needs_detail_refresh"] = 0
+
+        assignments = ", ".join(f"{k} = ?" for k in fields.keys())
+        values = list(fields.values()) + [deal_id]
+
+        sql = f"""
+            UPDATE deals
+            SET {assignments}
+            WHERE deal_id = ?
+        """
+
+        with self.get_conn() as conn:
+            conn.execute(sql, values)
+            conn.commit()
