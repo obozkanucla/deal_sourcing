@@ -6,30 +6,23 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from src.brokers.base import BrokerClient
 from src.persistence.repository import SQLiteRepository
-from src.integrations.google_drive import upload_pdf_to_drive
 
-from src.integrations.google_auth import get_google_credentials
-from src.integrations.google_drive import get_drive_service
 
 class BusinessBuyersClient(BrokerClient):
     BASE_URL = "https://businessbuyers.co.uk"
-    PDF_TMP_DIR = Path("tmp_pdfs")
-    PDF_TMP_DIR.mkdir(exist_ok=True)
-
-    DRIVE_FOLDER_ID = "PUT_BUSINESSBUYERS_FOLDER_ID_HERE"
-
-    def __init__(self, username: str, password: str, click_budget):
+    selected_sector = "Healthcare"
+    def __init__(self, *, username: None, password: None, login=False, click_budget):
+        self.login_enabled = login
         self.username = username
         self.password = password
         self.click_budget = click_budget
 
         self.browser = None
         self.page = None
+        self.auth_context = None
+        self.anon_context = None
 
         self.repo = SQLiteRepository(Path("db/deals.sqlite"))
-
-        self.creds = get_google_credentials()
-        self.drive_service = get_drive_service(self.creds)
 
     # ------------------------------------------------------------------
     # AUTH
@@ -104,7 +97,7 @@ class BusinessBuyersClient(BrokerClient):
         self.ensure_cookies_cleared()
 
         self.apply_search_filters(
-            sector="Healthcare",
+            sector=self.selected_sector,
             postcode="W14 8EN",
             miles="100",
         )
@@ -137,12 +130,13 @@ class BusinessBuyersClient(BrokerClient):
                     continue
 
                 seen.add(listing_id)
+                sector_raw = f"BusinessBuyers:{self.selected_sector}"
 
                 self.repo.upsert_index_only(
                     source="BusinessBuyers",
                     source_listing_id=listing_id,
                     source_url=href,
-                    sector="Healthcare",
+                    sector_raw=sector_raw,  # broker-known, allowed
                 )
 
                 total += 1
@@ -175,44 +169,14 @@ class BusinessBuyersClient(BrokerClient):
     # DETAIL
     # ------------------------------------------------------------------
 
-    from pathlib import Path
-    from datetime import datetime
+    def fetch_listing_detail(self, listing: dict) -> str:
+        if self.click_budget is not None:
+            self.click_budget.consume()
 
-    def fetch_listing_detail_and_pdf(self, listing: dict, pdf_base_dir: Path):
-        self.click_budget.consume()
-
-        url = listing["source_url"]
-        deal_id = listing["deal_id"]
-
-        self.page.goto(url)
+        self.page.goto(listing["source_url"])
         self.page.wait_for_load_state("networkidle")
-        self.ensure_cookies_cleared()
 
-        html = self.page.content()
-
-        # ---- PDF ----
-        pdf_dir = pdf_base_dir / listing["source"]
-        pdf_dir.mkdir(parents=True, exist_ok=True)
-
-        pdf_path = pdf_dir / f"{deal_id}.pdf"
-
-        self.page.pdf(
-            path=str(pdf_path),
-            format="A4",
-            print_background=True,
-            margin={
-                "top": "20mm",
-                "bottom": "20mm",
-                "left": "15mm",
-                "right": "15mm",
-            },
-        )
-
-        return {
-            "raw_html": html,
-            "pdf_path": str(pdf_path),
-            "detail_fetched_at": datetime.utcnow().isoformat(),
-        }
+        return self.page.content()
 
     # ------------------------------------------------------------------
     # UTIL
@@ -238,3 +202,42 @@ class BusinessBuyersClient(BrokerClient):
         except PlaywrightTimeoutError:
             pass
 
+    def fetch_detail_anon(self, url: str) -> str:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=30000)
+            page.wait_for_load_state("domcontentloaded")
+            html = page.content()
+            browser.close()
+            return html
+
+    def fetch_detail_anon_with_pdf(self, url: str, pdf_path: Path) -> str:
+        # 🔑 ENSURE anon context exists
+        if self.anon_context is None:
+            if self.browser is None:
+                # browser must exist even for anon
+                self._playwright = sync_playwright().start()
+                self.browser = self._playwright.chromium.launch(headless=True)
+
+            self.anon_context = self.browser.new_context()
+
+        page = self.anon_context.new_page()
+        page.goto(url, wait_until="networkidle")
+
+        html = page.content()
+
+        page.pdf(
+            path=str(pdf_path),
+            format="A4",
+            print_background=True,
+            margin={
+                "top": "20mm",
+                "bottom": "20mm",
+                "left": "15mm",
+                "right": "15mm",
+            },
+        )
+
+        page.close()
+        return html

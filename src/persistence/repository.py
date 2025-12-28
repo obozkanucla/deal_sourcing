@@ -8,7 +8,7 @@ class SQLiteRepository:
         # ✅ force path relative to project root
         project_root = Path(__file__).resolve().parents[2]
         self.db_path = project_root / db_path
-        print("📀 SQLite DB path:", db_path.resolve())
+        print("📀 SQLite DB path:", self.db_path.resolve())
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
@@ -37,7 +37,7 @@ class SQLiteRepository:
     # ---------- DEALS ----------
 
     def deal_exists(self, source: str, listing_id: str) -> bool:
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_conn() as conn:
             cur = conn.execute(
                 """
                 SELECT 1 FROM deals
@@ -48,7 +48,7 @@ class SQLiteRepository:
             return cur.fetchone() is not None
 
     def get_content_hash(self, source: str, listing_id: str):
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_conn() as conn:
             cur = conn.execute(
                 """
                 SELECT content_hash FROM deals
@@ -75,7 +75,7 @@ class SQLiteRepository:
         now = datetime.utcnow().isoformat()
         today = date.today().isoformat()
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_conn() as conn:
             conn.execute(
                 """
                 INSERT INTO deals (
@@ -122,7 +122,7 @@ class SQLiteRepository:
     # ---------- RATE LIMITING ----------
 
     def get_clicks_used(self, broker: str, day: date) -> int:
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_conn() as conn:
             cur = conn.execute(
                 """
                 SELECT clicks_used FROM daily_clicks
@@ -134,7 +134,7 @@ class SQLiteRepository:
             return row[0] if row else 0
 
     def increment_clicks(self, broker: str, day: date):
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_conn() as conn:
             conn.execute(
                 """
                 INSERT INTO daily_clicks (date, broker, clicks_used)
@@ -151,23 +151,25 @@ class SQLiteRepository:
             source: str,
             source_listing_id: str,
             source_url: str,
-            sector: Optional[str] = None,
+            sector_raw: Optional[str] = None,
     ):
         now = datetime.utcnow().isoformat()
         today = date.today().isoformat()
 
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_conn() as conn:
             conn.execute(
                 """
                 INSERT INTO deals (source,
                                    source_listing_id,
                                    source_url,
-                                   sector,
+                                   sector_raw,
                                    first_seen,
                                    last_seen,
                                    last_updated)
-                VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source, source_listing_id) DO
+                VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source, source_listing_id)
+                DO
                 UPDATE SET
+                    sector_raw = excluded.sector_raw,
                     last_seen = excluded.last_seen,
                     last_updated = excluded.last_updated
                 """,
@@ -175,7 +177,7 @@ class SQLiteRepository:
                     source,
                     source_listing_id,
                     source_url,
-                    sector,
+                    sector_raw,
                     today,
                     today,
                     now,
@@ -187,7 +189,7 @@ class SQLiteRepository:
         Return index-only deals that have not yet been processed
         (i.e. no content_hash yet).
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with self.get_conn() as conn:
             cur = conn.execute(
                 """
                 SELECT source,
@@ -211,7 +213,7 @@ class SQLiteRepository:
             ]
 
     def fetch_all_deals(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = self.get_conn()
         conn.row_factory = sqlite3.Row
 
         rows = conn.execute(
@@ -287,6 +289,29 @@ class SQLiteRepository:
             conn.execute(sql, values)
             conn.commit()
 
+    def update_sector_inference(
+            self,
+            deal_id,
+            industry,
+            sector,
+            source,
+            reason,
+            confidence,
+    ):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET industry                    = ?,
+                    sector                      = ?,
+                    sector_source               = ?,
+                    sector_inference_reason     = ?,
+                    sector_inference_confidence = ?
+                WHERE deal_id = ?
+                """,
+                (industry, sector, source, reason, confidence, deal_id),
+            )
+
     def fetch_by_deal_id(self, deal_id: str):
         with self.get_conn() as conn:
             cur = conn.execute(
@@ -309,21 +334,41 @@ class SQLiteRepository:
                 (pdf_path, pdf_drive_url, deal_id),
             )
 
-    def fetch_deals_needing_details(self, limit: int):
+    def fetch_deals_needing_details(self, *, source: str, limit: int):
         return self.fetch_all(
             """
             SELECT *
             FROM deals
-            WHERE source = 'BusinessBuyers'
+            WHERE source = ?
               AND (
                 content_hash IS NULL
-                    OR drive_folder_id IS NULL
                     OR needs_detail_refresh = 1
                 )
             ORDER BY last_seen DESC LIMIT ?
             """,
-            (limit,),
+            (source, limit),
         )
+
+    def fetch_deals_needing_details_for_source(self, source: str, limit: int):
+        sql = """
+              SELECT *
+              FROM deals
+              WHERE source = ?
+                AND (
+                  content_hash IS NULL
+                      OR pdf_path IS NULL
+                      OR needs_detail_refresh = 1
+                  )
+              ORDER BY last_seen DESC \
+              """
+
+        params = [source]
+
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+
+        return self.fetch_all(sql, tuple(params))
 
     def mark_detail_checked(self, deal_id: str, reason: str):
         with self.get_conn() as conn:
@@ -480,3 +525,118 @@ class SQLiteRepository:
                     rec["description"],
                 ),
             )
+
+    def insert_raw_deal(self, deal: dict):
+        """
+        Insert or update a raw deal (e.g. Dmitry sheets).
+        Deduplicates on (source, source_listing_id).
+        Preserves first_seen.
+        """
+
+        source_url = f"internal://{deal['source']}/{deal['source_listing_id']}"
+        now = datetime.utcnow().isoformat()
+
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO deals (
+                    deal_id,
+                    source,
+                    source_url,
+                    source_listing_id,
+                    identity_method,
+                    content_hash,
+                    description,
+                    sector_raw,
+                    industry_raw,
+                    location,
+                    revenue_latest,
+                    ebitda_latest,
+                    ebitda_margin_pct,
+                    notes,
+                    first_seen,
+                    last_seen,
+                    manual_imported_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
+                ON CONFLICT(source, source_listing_id)
+                DO UPDATE SET
+                    last_seen = excluded.last_seen,
+                    manual_imported_at = excluded.manual_imported_at
+                """,
+                (
+                    deal["deal_id"],
+                    deal["source"],                     # "Dmitry"
+                    source_url,                          # synthetic URL
+                    deal["source_listing_id"],           # Aug25-D / Oct25-D
+                    deal["identity_method"],
+                    deal["content_hash"],
+                    deal["description"],
+                    deal["sector_raw"],
+                    deal["industry_raw"],
+                    deal["location"],
+                    deal["revenue_latest"],
+                    deal["ebitda_latest"],
+                    deal["ebitda_margin_pct"],
+                    deal["notes"],
+                    deal["first_seen"],                  # only used on INSERT
+                    deal["last_seen"],                   # updated on re-seen
+                    now,
+                ),
+            )
+
+    def update_dmitry_seen(self, deal_id: str, seen_date: str):
+        """
+        Update last_seen for an existing Dmitry deal.
+        first_seen must remain unchanged.
+        """
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET last_seen = ?,
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE deal_id = ?
+                """,
+                (seen_date, deal_id),
+            )
+            conn.commit()
+
+    def upsert_dmitry_seen(self, *, deal_id: str, first_seen: str, last_seen: str):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET first_seen   = ?,
+                    last_seen    = ?,
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE deal_id = ?
+                """,
+                (first_seen, last_seen, deal_id),
+            )
+
+    def update_detail_fields_by_source(
+            self,
+            *,
+            source: str,
+            source_listing_id: str,
+            fields: dict,
+    ):
+        if not fields:
+            return
+
+        assignments = ", ".join(f"{k} = ?" for k in fields.keys())
+        values = list(fields.values()) + [source, source_listing_id]
+
+        sql = f"""
+            UPDATE deals
+            SET {assignments},
+                last_updated = CURRENT_TIMESTAMP
+            WHERE source = ?
+              AND source_listing_id = ?
+        """
+
+        with self.get_conn() as conn:
+            conn.execute(sql, values)
+            conn.commit()

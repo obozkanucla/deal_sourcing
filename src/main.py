@@ -1,7 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from brokers.business_buyers import BusinessBuyersClient
+from brokers.businessbuyers_client import BusinessBuyersClient
 from utils.rate_limit import DailyClickBudget, BudgetExhausted
 from utils.hashing import hash_text
 
