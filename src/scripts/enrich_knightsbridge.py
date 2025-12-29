@@ -116,6 +116,50 @@ def goto_with_retry(page, url, retries=2):
                 raise
             time.sleep(2)
 
+import re
+
+import re
+
+import re
+
+MAX_TITLE_LEN = 80  # this is sane for Drive
+
+def clean_and_shorten_title(title: str | None) -> str:
+    if not title:
+        return "Untitled Deal"
+
+    t = title.strip()
+
+    # Remove [None], (None), bare None anywhere
+    t = re.sub(r"[\[\(]?\bnone\b[\]\)]?", "", t, flags=re.IGNORECASE)
+
+    # Remove Knightsbridge boilerplate phrases
+    boilerplate = [
+        r"opportunity to acquire",
+        r"well[- ]known",
+        r"well[- ]established",
+        r"established company",
+        r"specialising in",
+        r"alongside",
+        r"serving",
+        r"offering",
+    ]
+    for bp in boilerplate:
+        t = re.sub(bp, "", t, flags=re.IGNORECASE)
+
+    # Remove location suffixes like "- Surrey", "| London", etc.
+    t = re.sub(r"\s*[-|–]\s*[A-Z][a-zA-Z\s]+$", "", t)
+
+    # Collapse whitespace
+    t = re.sub(r"\s+", " ", t).strip()
+
+    # HARD truncate (word-safe)
+    if len(t) > MAX_TITLE_LEN:
+        t = t[:MAX_TITLE_LEN]
+        t = t.rsplit(" ", 1)[0]
+
+    return t or "Untitled Deal"
+
 def enrich_knightsbridge(limit: Optional[int] = None):
     print(f"📀 SQLite DB path: {DB_PATH}")
 
@@ -125,6 +169,7 @@ def enrich_knightsbridge(limit: Optional[int] = None):
     rows = conn.execute(
         """
         SELECT
+            id,
             deal_id,
             title,
             sector_raw,
@@ -180,10 +225,12 @@ def enrich_knightsbridge(limit: Optional[int] = None):
     # ------------------------------------------------------------------
 
     for r in drive_only:
+        row_id     = r["id"]  # ← primary key
         deal_id    = r["deal_id"]
         listing_id = r["source_listing_id"]
         pdf_path   = Path(r["pdf_path"])
-
+        raw_title = r["title"]
+        title = clean_and_shorten_title(raw_title)
         print(f"\n📁 Drive-only Knightsbridge {listing_id}")
 
         try:
@@ -196,9 +243,15 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                 broker="Knightsbridge",
             )
 
+            listing_id = r["source_listing_id"]
+            if not listing_id:
+                raise RuntimeError("source_listing_id is required for Knightsbridge")
+
+            canonical_id = f"KB-{listing_id}"
+
             deal_folder_id = find_or_create_deal_folder(
                 parent_folder_id=parent_folder_id,
-                deal_id=deal_id,
+                deal_id=canonical_id,
                 deal_title=r["title"],
             )
 
@@ -209,8 +262,9 @@ def enrich_knightsbridge(limit: Optional[int] = None):
             )
 
             pdf_path.unlink(missing_ok=True)
+            drive_folder_url = f"https://drive.google.com/drive/folders/{deal_folder_id}"
 
-            conn.execute(
+            cur = conn.execute(
                 """
                 UPDATE deals
                 SET
@@ -219,12 +273,13 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                     sector_source = 'broker',
                     sector_inference_confidence = ?,
                     sector_inference_reason = ?,
+                    drive_folder_url = ?,
                     drive_folder_id = ?,
                     pdf_drive_url = ?,
                     pdf_path = NULL,
                     needs_detail_refresh = 0,
                     last_updated = CURRENT_TIMESTAMP
-                WHERE deal_id = ?
+                WHERE id = ?
                 """,
                 (
                     industry,
@@ -232,23 +287,28 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                     mapping["confidence"],
                     mapping["reason"],
                     deal_folder_id,
+                    drive_folder_url,
                     pdf_drive_url,
-                    deal_id,
+                    row_id,
                 ),
             )
+            if cur.rowcount != 1:
+                raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
             conn.commit()
             print("✅ Uploaded + cleaned (Drive-only)")
 
         except Exception as e:
-            conn.execute(
+            cur = conn.execute(
                 """
                 UPDATE deals
                 SET needs_detail_refresh = 1,
                     detail_fetch_reason = ?
-                WHERE deal_id = ?
+                WHERE id = ?
                 """,
-                (str(e)[:500], deal_id),
+                (str(e)[:500], row_id),
             )
+            if cur.rowcount != 1:
+                raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
             conn.commit()
             print(f"❌ Drive-only error: {e}")
 
@@ -269,10 +329,13 @@ def enrich_knightsbridge(limit: Optional[int] = None):
 
     try:
         for r in needs_browser:
+            row_id = r["id"]
             deal_id    = r["deal_id"]
             listing_id = r["source_listing_id"]
             url        = r["source_url"]
             sector_raw = r["sector_raw"]
+            raw_title = r["title"]
+            title = clean_and_shorten_title(raw_title)
 
             processed += 1
             if processed % RESTART_EVERY == 0:
@@ -295,10 +358,12 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                 pdf_path = PDF_ROOT / f"{listing_id}.pdf"
                 client.page.pdf(path=str(pdf_path), format="A4", print_background=True)
 
-                conn.execute(
-                    "UPDATE deals SET pdf_path = ? WHERE deal_id = ?",
-                    (str(pdf_path), deal_id),
+                cur = conn.execute(
+                    "UPDATE deals SET pdf_path = ? WHERE id = ?",
+                    (str(pdf_path), row_id),
                 )
+                if cur.rowcount != 1:
+                    raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
                 conn.commit()
 
                 mapping = KNIGHTSBRIDGE_SECTOR_MAP[sector_raw]
@@ -310,9 +375,15 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                     broker="Knightsbridge",
                 )
 
+                listing_id = r["source_listing_id"]
+                if not listing_id:
+                    raise RuntimeError("source_listing_id is required for Knightsbridge")
+
+                canonical_id = f"KB-{listing_id}"
+
                 deal_folder_id = find_or_create_deal_folder(
                     parent_folder_id=parent_folder_id,
-                    deal_id=deal_id,
+                    deal_id=canonical_id,
                     deal_title=r["title"],
                 )
 
@@ -325,8 +396,9 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                 pdf_path.unlink(missing_ok=True)
 
                 fetched_at = datetime.utcnow().isoformat(timespec="seconds")
+                drive_folder_url = f"https://drive.google.com/drive/folders/{deal_folder_id}"
 
-                conn.execute(
+                cur = conn.execute(
                     """
                     UPDATE deals
                     SET
@@ -338,13 +410,14 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                         sector_inference_confidence = ?,
                         sector_inference_reason = ?,
                         drive_folder_id = ?,
+                        drive_folder_url = ?,
                         pdf_drive_url = ?,
                         pdf_path = NULL,
                         detail_fetched_at = ?,
                         needs_detail_refresh = 0,
                         detail_fetch_reason = NULL,
                         last_updated = CURRENT_TIMESTAMP
-                    WHERE deal_id = ?
+                    WHERE id = ?
                     """,
                     (
                         description,
@@ -354,25 +427,30 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                         mapping["confidence"],
                         mapping["reason"],
                         deal_folder_id,
+                        drive_folder_url,
                         pdf_drive_url,
                         fetched_at,
-                        deal_id,
+                        row_id,
                     ),
                 )
+                if cur.rowcount != 1:
+                    raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
                 conn.commit()
 
                 print("✅ Enriched + uploaded")
 
             except Exception as e:
-                conn.execute(
+                cur = conn.execute(
                     """
                     UPDATE deals
                     SET needs_detail_refresh = 1,
                         detail_fetch_reason = ?
-                    WHERE deal_id = ?
+                    WHERE id = ?
                     """,
-                    (str(e)[:500], deal_id),
+                    (str(e)[:500], row_id),
                 )
+                if cur.rowcount != 1:
+                    raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
                 conn.commit()
                 print(f"❌ Error: {e}")
 
@@ -384,4 +462,4 @@ def enrich_knightsbridge(limit: Optional[int] = None):
 
 
 if __name__ == "__main__":
-    enrich_knightsbridge()
+    enrich_knightsbridge(limit=1)

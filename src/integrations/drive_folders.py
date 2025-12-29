@@ -52,7 +52,14 @@ def _find_or_create_folder(*, parent_id: str, name: str) -> str:
         "and trashed=false"
     )
 
-    res = service.files().list(q=query, fields="files(id)").execute()
+    res = service.files().list(
+        q=query,
+        fields="files(id, name)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora="allDrives",
+    ).execute()
+
     files = res.get("files", [])
 
     if files:
@@ -95,44 +102,3 @@ def get_drive_parent_folder_id(
     )
 
     return broker_folder_id
-
-# ============================================================
-# DEAL FOLDER CREATION
-# ============================================================
-
-def find_or_create_deal_folder(
-    *,
-    parent_folder_id: str,
-    deal_id: str,
-    deal_title: str | None = None,
-) -> str:
-    service = get_drive_service()
-
-    month_prefix = datetime.utcnow().strftime("%y%m")
-    safe_title = deal_title.strip() if deal_title else deal_id
-    folder_name = f"{month_prefix} {safe_title}"
-
-    query = (
-        "mimeType='application/vnd.google-apps.folder' "
-        f"and name='{folder_name}' "
-        f"and '{parent_folder_id}' in parents "
-        "and trashed=false"
-    )
-
-    res = service.files().list(q=query, fields="files(id)").execute()
-    files = res.get("files", [])
-
-    if files:
-        return files[0]["id"]
-
-    folder = service.files().create(
-        body={
-            "name": folder_name,
-            "mimeType": "application/vnd.google-apps.folder",
-            "parents": [parent_folder_id],
-        },
-        fields="id",
-        supportsAllDrives=True,
-    ).execute()
-
-    return folder["id"]
