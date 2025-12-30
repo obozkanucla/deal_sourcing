@@ -56,6 +56,10 @@ def parse_pct(val):
     except Exception:
         return None
 
+def derive_title_from_description(desc: str | None) -> str | None:
+    if not desc:
+        return None
+    return desc.split("\n")[0].strip()[:200]
 
 def fingerprint(sector_raw, location, revenue, ebitda):
     """
@@ -116,6 +120,7 @@ def main():
                 "source_url": "dmitry-sheet",
                 "identity_method": "dmitry_fingerprint",
                 "content_hash": deal_fp,
+                "title": derive_title_from_description(description),
                 "description": description,
                 "sector_raw": sector_raw,
                 "industry_raw": None,

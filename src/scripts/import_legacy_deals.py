@@ -131,6 +131,8 @@ def main():
                 or val("Sector #4")
                 or None
         )
+        outcome = val("Outcome")
+        outcome_reason = val("Reason")
         deal = {
             "deal_id": deal_id,
             "source": "LegacySheet",
@@ -144,8 +146,8 @@ def main():
             "incorporation_year": parse_int(val("Inc")),
             "first_seen": parse_date(val("Date Received")),
             "last_updated": parse_date(val("Last update")),
-            "outcome": val("Outcome"),
-            "outcome_reason": val("Reason"),
+            "outcome": outcome,  # → status
+            "outcome_reason": outcome_reason,
             "status": val("Outcome"),
             "notes": val("Update"),
             "revenue_k": parse_money_k(val("Latest revenue (annual-000)")),
@@ -161,6 +163,10 @@ def main():
             print(json.dumps(deal, indent=2))
             continue
 
+        # print(
+        #     deal["deal_id"],
+        #     "OUTCOME=", repr(deal.get("outcome"))
+        # )
         repo.upsert_legacy_deal(deal)
         imported += 1
 

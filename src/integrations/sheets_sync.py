@@ -31,6 +31,12 @@ def row_from_deal(deal: dict, columns=DEAL_COLUMNS) -> list:
                 row.append(f'=HYPERLINK("{url}", "Folder")')
             else:
                 row.append("")
+        elif col.name == "source_url":
+            url = deal.get("source_url")
+            if url:
+                row.append(f'=HYPERLINK("{url}", "Link to deal")')
+            else:
+                row.append("")
 
         else:
             row.append(deal.get(col.name))
@@ -285,3 +291,234 @@ def backfill_system_columns(repo, ws, columns, batch_size=100):
         ws.batch_update(updates)
 
     print("✅ System column backfill complete")
+
+
+
+from gspread.utils import rowcol_to_a1
+import string
+
+def col_letter(idx: int) -> str:
+    """1-based index → column letter"""
+    result = ""
+    while idx:
+        idx, rem = divmod(idx - 1, 26)
+        result = chr(65 + rem) + result
+    return result
+
+
+def format_currency_column(ws, col_idx):
+    col = col_letter(col_idx)
+    ws.format(
+        f"{col}:{col}",
+        {
+            "numberFormat": {
+                "type": "NUMBER",
+                "pattern": "£#,##0"
+            }
+        }
+    )
+
+def format_percentage_column(ws, col_idx):
+    col = col_letter(col_idx)
+    ws.format(
+        f"{col}:{col}",
+        {
+            "numberFormat": {
+                "type": "NUMBER",
+                "pattern": "0.00%"
+            }
+        }
+    )
+
+def header_to_col_idx(ws):
+    headers = ws.row_values(1)
+    return {h: i + 1 for i, h in enumerate(headers)}
+
+def apply_status_rules(ws, col_idx):
+    rules = {
+        "Pass":   {"red": 0.95, "green": 0.8,  "blue": 0.8},
+        "CIM":    {"red": 0.8,  "green": 0.95, "blue": 0.8},
+        "Parked": {"red": 1.0,  "green": 0.9,  "blue": 0.6},
+    }
+
+    requests = []
+
+    for value, color in rules.items():
+        requests.append({
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [{
+                        "sheetId": ws.id,
+                        "startRowIndex": 1,              # skip header
+                        "startColumnIndex": col_idx - 1,
+                        "endColumnIndex": col_idx,
+                    }],
+                    "booleanRule": {
+                        "condition": {
+                            "type": "TEXT_EQ",
+                            "values": [{"userEnteredValue": value}],
+                        },
+                        "format": {
+                            "backgroundColor": color
+                        },
+                    },
+                },
+                "index": 0,
+            }
+        })
+
+    ws.spreadsheet.batch_update({"requests": requests})
+
+def freeze_header_row(ws):
+    ws.spreadsheet.batch_update({
+        "requests": [
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": ws.id,
+                        "gridProperties": {
+                            "frozenRowCount": 1
+                        }
+                    },
+                    "fields": "gridProperties.frozenRowCount"
+                }
+            }
+        ]
+    })
+
+def format_header_row(ws):
+    ws.spreadsheet.batch_update({
+        "requests": [
+            {
+                "repeatCell": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": 0,
+                        "endRowIndex": 1
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {
+                                "red": 1.0,
+                                "green": 0.96,
+                                "blue": 0.80
+                            },
+                            "textFormat": {
+                                "bold": True
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat(backgroundColor,textFormat)"
+                }
+            }
+        ]
+    })
+
+def unfreeze_sheet(ws):
+    ws.spreadsheet.batch_update({
+        "requests": [
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": ws.id,
+                        "gridProperties": {
+                            "frozenRowCount": 0,
+                            "frozenColumnCount": 0
+                        }
+                    },
+                    "fields": "gridProperties.frozenRowCount,gridProperties.frozenColumnCount"
+                }
+            }
+        ]
+    })
+    print("🧊 Sheet unfrozen")
+
+def reset_sheet_state(ws, num_columns: int):
+    """
+    Hard reset a sheet:
+    - unfreeze rows/columns
+    - clear values
+    - remove all formatting
+    - remove conditional formatting rules
+    - reset column widths
+    """
+
+    sheet_id = ws.id
+
+    requests = [
+        # 1️⃣ Unfreeze everything
+        {
+            "updateSheetProperties": {
+                "properties": {
+                    "sheetId": sheet_id,
+                    "gridProperties": {
+                        "frozenRowCount": 0,
+                        "frozenColumnCount": 0,
+                    },
+                },
+                "fields": "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
+            }
+        },
+
+        # 2️⃣ Clear all formatting (backgrounds, number formats, text styles)
+        {
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                },
+                "cell": {
+                    "userEnteredFormat": {},
+                },
+                "fields": "userEnteredFormat",
+            }
+        },
+
+        # 3️⃣ Remove ALL conditional formatting rules
+        {
+            "deleteConditionalFormatRule": {
+                "sheetId": sheet_id,
+                "index": 0,
+            }
+        },
+    ]
+
+    # ⚠️ Conditional rules must be deleted one-by-one.
+    # We don’t know how many exist, so we loop defensively.
+    while True:
+        try:
+            ws.spreadsheet.batch_update({"requests": requests})
+            break
+        except Exception:
+            # stop when no more conditional rules exist
+            break
+
+    # 4️⃣ Clear values last (after formatting reset)
+    ws.clear()
+
+    # 5️⃣ Reset column widths (Google default ≈ 100px)
+    ws.resize(rows=1, cols=num_columns)
+
+    print("🧼 Sheet fully reset (values + formatting + freezes)")
+
+def apply_sheet_formatting(ws):
+    col = header_to_col_idx(ws)
+
+    # Financials
+    for name in ("revenue_k", "ebitda_k", "asking_price_k"):
+        if name in col:
+            format_currency_column(ws, col[name])
+
+    # if "ebitda_margin" in col:
+    #     format_percentage_column(ws, col["ebitda_margin"])
+
+    # Workflow
+    for name in ("status", "decision"):
+        if name in col:
+            apply_status_rules(ws, col[name])
+
+    print("🎨 Sheet formatting applied")
+
+def apply_base_sheet_formatting(ws):
+    freeze_header_row(ws)
+    format_header_row(ws)
+    print("🧊 Header frozen & styled")

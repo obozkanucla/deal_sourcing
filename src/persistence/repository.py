@@ -448,30 +448,28 @@ class SQLiteRepository:
         with self.get_conn() as conn:
             conn.execute(
                 """
-                INSERT INTO deals (
-                    deal_id,
-                    source,
-                    source_url,
-                    source_listing_id,
-                    intermediary,
-                    title,
-                    industry,
-                    sector,
-                    sector_source,
-                    location,
-                    incorporation_year,
-                    first_seen,
-                    last_updated,
-                    decision,
-                    decision_reason,
-                    notes,
-                    revenue_k,
-                    ebitda_k,
-                    asking_price_k,
-                    drive_folder_url
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(deal_id) DO UPDATE SET
+                INSERT INTO deals (deal_id,
+                                   source,
+                                   source_url,
+                                   source_listing_id,
+                                   intermediary,
+                                   title,
+                                   industry,
+                                   sector,
+                                   sector_source,
+                                   location,
+                                   incorporation_year,
+                                   first_seen,
+                                   last_updated,
+                                   status, -- ✅ Legacy outcome lives here
+                                   decision_reason, -- ✅ Legacy reason
+                                   notes,
+                                   revenue_k,
+                                   ebitda_k,
+                                   asking_price_k,
+                                   drive_folder_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(deal_id) DO
+                UPDATE SET
                     intermediary = excluded.intermediary,
                     title = excluded.title,
                     industry = excluded.industry,
@@ -480,7 +478,7 @@ class SQLiteRepository:
                     location = excluded.location,
                     incorporation_year = excluded.incorporation_year,
                     last_updated = excluded.last_updated,
-                    decision = excluded.decision,
+                    status = excluded.status, -- ✅
                     decision_reason = excluded.decision_reason,
                     notes = excluded.notes,
                     revenue_k = excluded.revenue_k,
@@ -490,9 +488,9 @@ class SQLiteRepository:
                 """,
                 (
                     deal["deal_id"],  # deal_id
-                    deal["source"],  # source ("LegacySheet")
-                    f"legacy://{deal['deal_id']}",  # source_url ✅ REQUIRED
-                    deal["deal_id"],  # source_listing_id ✅ REQUIRED
+                    deal["source"],  # "LegacySheet"
+                    f"legacy://{deal['deal_id']}",  # source_url
+                    deal["deal_id"],  # source_listing_id
                     deal["intermediary"],
                     deal["title"],
                     deal["industry"],
@@ -502,9 +500,9 @@ class SQLiteRepository:
                     deal["incorporation_year"],
                     deal["first_seen"],
                     deal["last_updated"],
-                    deal["outcome"],
-                    deal["outcome_reason"],
-                    deal["notes"],
+                    deal["outcome"],  # ✅ → status
+                    deal["outcome_reason"],  # ✅
+                    deal["notes"],  # Legacy "Update"
                     deal["revenue_k"],
                     deal["ebitda_k"],
                     deal["asking_price_k"],
@@ -578,6 +576,7 @@ class SQLiteRepository:
                     source,
                     source_url,
                     source_listing_id,
+                    title,
                     identity_method,
                     content_hash,
                     description,
@@ -592,7 +591,7 @@ class SQLiteRepository:
                     last_seen,
                     manual_imported_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 
                 ON CONFLICT(source, source_listing_id)
                 DO UPDATE SET
@@ -602,8 +601,9 @@ class SQLiteRepository:
                 (
                     deal["deal_id"],
                     deal["source"],                     # "Dmitry"
-                    source_url,                          # synthetic URL
-                    deal["source_listing_id"],           # Aug25-D / Oct25-D
+                    source_url,                         # synthetic URL
+                    deal["source_listing_id"],          # Aug25-D / Oct25-D
+                    deal["title"],
                     deal["identity_method"],
                     deal["content_hash"],
                     deal["description"],
@@ -751,3 +751,47 @@ class SQLiteRepository:
                 """
             )
             conn.commit()
+
+    def fetch_deals_with_descriptions(
+            self,
+            *,
+            sources: list[str] | None = None,
+            only_missing_financials: bool = True,
+    ):
+        """
+        Fetch deals that have descriptions and are candidates
+        for financial extraction.
+        """
+
+        where = ["description IS NOT NULL", "TRIM(description) != ''"]
+
+        if only_missing_financials:
+            where.append("""
+                (revenue_k IS NULL
+                 OR ebitda_k IS NULL
+                 OR asking_price_k IS NULL)
+            """)
+
+        if sources:
+            placeholders = ",".join("?" for _ in sources)
+            where.append(f"source IN ({placeholders})")
+
+        sql = f"""
+            SELECT
+                id,
+                source,
+                source_listing_id,
+                description,
+                revenue_k,
+                ebitda_k,
+                asking_price_k
+            FROM deals
+            WHERE {' AND '.join(where)}
+            ORDER BY last_updated DESC
+        """
+
+        params = sources or []
+        with self.get_conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+
+        return [dict(r) for r in rows]

@@ -16,12 +16,15 @@ from src.integrations.sheets_sync import (
     push_sqlite_to_sheets,
     pull_sheets_to_sqlite,
     update_folder_links,
-    backfill_system_columns
+    backfill_system_columns,
+    apply_sheet_formatting,
+    apply_base_sheet_formatting,
+    reset_sheet_state
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
 SPREADSHEET_ID = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
-WORKSHEET_NAME = "DealsV2"
+WORKSHEET_NAME = "Deals"
 
 DB_PATH = Path("db/deals.sqlite")
 
@@ -32,13 +35,14 @@ def main():
     sh = gc.open_by_key(SPREADSHEET_ID)
     ws = sh.worksheet(WORKSHEET_NAME)
 
+    reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
+
     # Pull analyst edits back
     pull_sheets_to_sqlite(
         repo,
         ws,
         columns=DEAL_COLUMNS
     )
-
 
     # ✅ SINGLE SOURCE OF TRUTH
     ensure_sheet_headers(ws, DEAL_COLUMNS)
@@ -48,6 +52,8 @@ def main():
         repo,
         ws
     )
+    apply_sheet_formatting(ws)
+    apply_base_sheet_formatting(ws)
 
     # Backfill Drive folder links
     update_folder_links(repo, ws)
@@ -57,6 +63,7 @@ def main():
         ws,
         columns=["title", "industry", "sector", "location"]
     )
+
 
 if __name__ == "__main__":
     main()
