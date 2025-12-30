@@ -12,8 +12,8 @@ class DealOpportunitiesClient:
 
     HEADLESS = False
     MAX_PAGES_PER_RUN = 50
-    BASE_SLEEP = 3
-    JITTER = 3
+    BASE_SLEEP = 8
+    JITTER = 6
 
     # =========================
     # LIFECYCLE
@@ -23,6 +23,9 @@ class DealOpportunitiesClient:
         self.browser = None
         self.page = None
         self._playwright = None
+
+    def _cooldown(self):
+        time.sleep(10 + random.random() * 6)
 
     def start(self):
         print("🚀 Starting DealOpportunities client")
@@ -45,6 +48,8 @@ class DealOpportunitiesClient:
 
     def _human_sleep(self):
         time.sleep(self.BASE_SLEEP + random.random() * self.JITTER)
+
+
 
     def _extract_dl_map(self, li):
         data = {}
@@ -171,13 +176,17 @@ class DealOpportunitiesClient:
     def fetch_listing_detail_and_pdf(self, url: str, pdf_path: Path) -> str:
         print("➡️ Fetching detail page:")
         print(f"   {url}")
+        page = self.browser.new_page()
 
-        self.page.goto(url, timeout=60_000)
-        self.page.wait_for_load_state("networkidle")
+        page.goto(url, timeout=60_000)
+        # 🔑 MUST come before content extraction or PDF
+        self.accept_cookies_if_present(page)
 
-        html = self.page.content()
+        page.wait_for_load_state("networkidle")
 
-        self.page.pdf(
+        html = page.content()
+
+        page.pdf(
             path=str(pdf_path),
             format="A4",
             print_background=True,
@@ -188,6 +197,23 @@ class DealOpportunitiesClient:
                 "right": "15mm",
             },
         )
-
+        page.close()
         print("✅ Detail HTML + PDF captured")
         return html
+
+    def accept_cookies_if_present(self, page):
+        try:
+            btn = page.locator("button", has_text="I agree")
+            if btn.count() > 0:
+                btn.first.click(timeout=3_000)
+                page.wait_for_timeout(500)
+        except Exception:
+            pass
+
+        # 🔒 Hard kill-switch (future proof)
+        page.add_style_tag(content="""
+            div[role="dialog"],
+            div:has-text("We use cookies") {
+                display: none !important;
+            }
+        """)

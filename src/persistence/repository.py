@@ -12,7 +12,24 @@ class SQLiteRepository:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
 
-
+        self.DEALS_DB_COLUMNS = {
+                                "source",
+                                "source_listing_id",
+                                "source_url",
+                                "title",
+                                "industry",
+                                "sector",
+                                "status",
+                                "owner",
+                                "priority",
+                                "notes",
+                                "last_touch",
+                                "first_seen",
+                                "last_seen",
+                                "decision",
+                                "decision_confidence",
+                                "drive_folder_url",
+                            }
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
             with open(Path(__file__).parent / "schema.sql") as f:
@@ -218,17 +235,25 @@ class SQLiteRepository:
 
         rows = conn.execute(
             """
-            SELECT deal_id,
-                   source,
-                   source_listing_id,
-                   source_url,
-                   sector,
-                   decision,
-                   decision_confidence,
-                   first_seen,
-                   last_seen,
-                   last_updated,
-                   drive_folder_url
+            SELECT             
+                id,
+            source,
+            source_listing_id,
+            source_url,
+            title,
+            industry,
+            sector,
+            status,
+            owner,
+            priority,
+            notes,
+            last_touch,
+            first_seen,
+            last_seen,
+            last_updated,
+            decision,
+            decision_confidence,
+            drive_folder_url
             FROM deals
             ORDER BY first_seen ASC
             """
@@ -271,18 +296,24 @@ class SQLiteRepository:
                 ),
             )
 
-    def update_deal_fields(self, deal_id: str, fields: dict):
-        if not fields:
+    def update_deal_fields(self, deal_id: int, updates: dict):
+        safe_updates = {
+            k: v
+            for k, v in updates.items()
+            if k in self.DEALS_DB_COLUMNS
+        }
+
+        if not safe_updates:
             return
 
-        assignments = ", ".join([f"{k} = ?" for k in fields.keys()])
-        values = list(fields.values()) + [deal_id]
+        cols = ", ".join(f"{k} = ?" for k in safe_updates)
+        values = list(safe_updates.values()) + [deal_id]
 
         sql = f"""
             UPDATE deals
-            SET {assignments},
+            SET {cols},
                 last_updated = CURRENT_TIMESTAMP
-            WHERE deal_id = ?
+            WHERE id = ?
         """
 
         with self.get_conn() as conn:
@@ -640,3 +671,20 @@ class SQLiteRepository:
         with self.get_conn() as conn:
             conn.execute(sql, values)
             conn.commit()
+
+    def fetch_by_source_and_listing(self, source: str, source_listing_id: str) -> dict | None:
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM deals
+                WHERE source = ?
+                  AND source_listing_id = ?
+                """,
+                (source, source_listing_id),
+            ).fetchone()
+
+        return dict(row) if row else None
+
+    def compute_deal_uid(self, deal: dict) -> str:
+        return f"{deal['source']}:{deal['source_listing_id']}"

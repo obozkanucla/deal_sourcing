@@ -93,14 +93,23 @@ def main():
             continue
 
         deal_id = f"Legacy:{slugify(intermediary)}:{slugify(company)}"
+        industry = val("Industry")
 
+        sector = (
+                val("Sector")
+                or val("Sector #1")
+                or val("Sector #2")
+                or val("Sector #3")
+                or val("Sector #4")
+                or None
+        )
         deal = {
             "deal_id": deal_id,
             "source": "LegacySheet",
             "intermediary": intermediary,
             "company_name": company,
-            "industry": val("Industry"),
-            "sector": val("Sector"),
+            "industry": industry,
+            "sector": sector,
             "sector_source": "manual",
             "location": val("Location"),
             "incorporation_year": parse_int(val("Inc")),

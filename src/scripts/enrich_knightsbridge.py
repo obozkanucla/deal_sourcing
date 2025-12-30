@@ -15,6 +15,7 @@ from src.integrations.google_drive import (
     upload_pdf_to_drive,
 )
 from src.sector_mappings.knightsbridge import KNIGHTSBRIDGE_SECTOR_MAP
+from src.persistence.deal_artifacts import record_deal_artifact
 
 
 # ---------------------------------------------------------------------
@@ -261,6 +262,21 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                 folder_id=deal_folder_id,
             )
 
+            drive_file_id = pdf_drive_url.split("/d/")[1].split("/")[0]
+
+            record_deal_artifact(
+                conn=conn,
+                deal_id=row_id,
+                broker="Knightsbridge",  # or Knightsbridge
+                artifact_type="pdf",
+                artifact_name=f"{listing_id}.pdf",
+                drive_file_id=drive_file_id,
+                drive_url=pdf_drive_url,
+                industry=mapping["industry"],
+                sector=mapping["sector"],
+                created_by="enrich_knightsbridge.py",
+            )
+
             pdf_path.unlink(missing_ok=True)
             drive_folder_url = f"https://drive.google.com/drive/folders/{deal_folder_id}"
 
@@ -462,4 +478,4 @@ def enrich_knightsbridge(limit: Optional[int] = None):
 
 
 if __name__ == "__main__":
-    enrich_knightsbridge(limit=1)
+    enrich_knightsbridge()

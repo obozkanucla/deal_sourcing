@@ -5,8 +5,14 @@ import re
 import json
 from typing import Optional
 
+from src.integrations.drive_folders import get_drive_parent_folder_id
 from src.brokers.axispartnership_client import AxisPartnershipClient
-
+from src.integrations.google_drive import (
+    find_or_create_deal_folder,
+    upload_pdf_to_drive,
+)
+from src.sector_mappings.axis import infer_axis_industry_sector
+from src.persistence.deal_artifacts import record_deal_artifact
 
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/axis_pdfs")
@@ -43,6 +49,31 @@ def _extract_description(page) -> Optional[str]:
     except Exception:
         return None
 
+def _extract_title(page) -> Optional[str]:
+    try:
+        h1 = page.locator("h1.xtra-post-title-headline").first
+        if h1.count():
+            return h1.inner_text().strip()
+    except Exception:
+        pass
+    return None
+
+def clean_axis_title(title: str, listing_id: str | int) -> str:
+    if not title:
+        return title
+
+    title = title.strip()
+
+    # Normalize dash variants just in case
+    normalized = title.replace("–", "-").replace("—", "-")
+
+    suffix = f"- {listing_id}"
+    if normalized.endswith(suffix):
+        return normalized[: -len(suffix)].strip()
+
+    return title
+
+
 def _extract_kpis(html: str) -> dict:
     """
     Lightweight, intentionally conservative extraction.
@@ -76,14 +107,13 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
-    # ------------------------------------------------------------------
-    # Find deals needing enrichment (additive + idempotent)
-    # ------------------------------------------------------------------
-    query = """
+    rows = conn.execute(
+        """
         SELECT
             id,
             source_listing_id,
-            source_url
+            source_url,
+            title
         FROM deals
         WHERE source = 'AxisPartnership'
           AND (
@@ -92,74 +122,134 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
                 OR detail_fetched_at IS NULL
           )
         ORDER BY source_listing_id
-    """
+        """
+    ).fetchall()
 
-    rows = conn.execute(query).fetchall()
     if limit:
         rows = rows[:limit]
 
     print(f"🔍 Found {len(rows)} Axis deals needing details")
 
     if not rows:
-        print("✅ Nothing to enrich")
         conn.close()
+        print("✅ Nothing to enrich")
         return
 
     client = AxisPartnershipClient()
     client.start()
 
     try:
-        for row in rows:
-            deal_id = row["id"]
-            listing_id = row["source_listing_id"]
-            url = row["source_url"]
+        for r in rows:
+            row_id     = r["id"]
+            listing_id = r["source_listing_id"]
+            url        = r["source_url"]
 
             print(f"\n➡️ Enriching Axis {listing_id}")
-            print(url)
 
             pdf_path = PDF_ROOT / f"{listing_id}.pdf"
             pdf_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # ----------------------------------------------------------
-            # Fetch detail + PDF
-            # ----------------------------------------------------------
             html = client.fetch_detail_and_pdf(url, pdf_path)
+            page_title = _extract_title(client.page)
+            clean_title = clean_axis_title(
+                title=page_title,
+                listing_id=listing_id,
+            )
+
+            title = clean_title or r["title"]
 
             description = _extract_description(client.page)
-            kpis = _extract_kpis(html)
+            mapping = infer_axis_industry_sector(
+                title=title,
+                description=description,
+            )
+            kpis        = _extract_kpis(html)
+            fetched_at  = datetime.utcnow().isoformat(timespec="seconds")
 
-            fetched_at = datetime.utcnow().isoformat(timespec="seconds")
+            # ---- Drive resolution ----
+            parent_folder_id = get_drive_parent_folder_id(
+                industry=mapping["industry"],
+                broker="AxisPartnership",
+            )
 
-            # ----------------------------------------------------------
-            # ATOMIC UPDATE (ALL FIELDS WIRED)
-            # ----------------------------------------------------------
-            conn.execute(
+            deal_folder_id = find_or_create_deal_folder(
+                parent_folder_id=parent_folder_id,
+                deal_id=str(listing_id),
+                deal_title=title,
+            )
+
+            pdf_drive_url = upload_pdf_to_drive(
+                local_path=str(pdf_path),
+                filename=f"{listing_id}.pdf",
+                folder_id=deal_folder_id,
+            )
+
+            drive_file_id = pdf_drive_url.split("/d/")[1].split("/")[0]
+
+            record_deal_artifact(
+                conn=conn,
+                deal_id=row_id,
+                broker="AxisPartnership",  # or Knightsbridge
+                artifact_type="pdf",
+                artifact_name=f"{listing_id}.pdf",
+                drive_file_id=drive_file_id,
+                drive_url=pdf_drive_url,
+                industry=mapping["industry"],
+                sector=mapping["sector"],
+                created_by="enrich_axispartnership.py",
+            )
+
+            pdf_path.unlink(missing_ok=True)
+
+            cur = conn.execute(
                 """
                 UPDATE deals
-                SET
-                    description = ?,
-                    extracted_json = ?,
-                    pdf_path = ?,
-                    detail_fetched_at = ?,
-                    needs_detail_refresh = 0,
-                    detail_fetch_reason = NULL,
-                    last_updated = CURRENT_TIMESTAMP
+                SET title                       = ?,
+                    description                 = ?,
+                    extracted_json              = ?,
+
+                    industry                    = ?,
+                    sector                      = ?,
+                    sector_source               = 'inferred',
+                    sector_inference_confidence = ?,
+                    sector_inference_reason     = ?,
+
+                    drive_folder_id             = ?,
+                    drive_folder_url            =
+                        'https://drive.google.com/drive/folders/' || ?,
+                    pdf_drive_url               = ?,
+                    pdf_path                    = NULL,
+
+                    detail_fetched_at           = ?,
+                    needs_detail_refresh        = 0,
+                    detail_fetch_reason         = NULL,
+                    last_updated                = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
                 (
+                    title,
                     description,
                     json.dumps(kpis) if kpis else None,
-                    str(pdf_path),
+
+                    mapping["industry"],
+                    mapping["sector"],
+                    mapping["confidence"],
+                    mapping["reason"],
+
+                    deal_folder_id,
+                    deal_folder_id,
+                    pdf_drive_url,
                     fetched_at,
-                    deal_id,
+                    row_id,
                 ),
             )
 
+            if cur.rowcount != 1:
+                raise RuntimeError(f"Expected 1 row updated, got {cur.rowcount}")
+
             conn.commit()
 
-            print(f"✅ Enriched Axis {listing_id}")
-            print(f"   Description: {'YES' if description else 'NO'}")
-            print(f"   PDF: {pdf_path}")
+            print("✅ Enriched + uploaded")
 
     finally:
         client.stop()

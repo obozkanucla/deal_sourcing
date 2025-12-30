@@ -213,31 +213,108 @@ class BusinessBuyersClient(BrokerClient):
             return html
 
     def fetch_detail_anon_with_pdf(self, url: str, pdf_path: Path) -> str:
-        # 🔑 ENSURE anon context exists
+        """
+        Fetch BusinessBuyers deal page anonymously and generate a clean PDF.
+
+        Contract:
+        - Cookie consent handled internally
+        - Overlays removed before PDF
+        - pdf_path EXISTS when function returns
+        """
+
+        # -------------------------------------------------
+        # Ensure anon browser + context
+        # -------------------------------------------------
         if self.anon_context is None:
             if self.browser is None:
-                # browser must exist even for anon
                 self._playwright = sync_playwright().start()
                 self.browser = self._playwright.chromium.launch(headless=True)
 
             self.anon_context = self.browser.new_context()
 
         page = self.anon_context.new_page()
-        page.goto(url, wait_until="networkidle")
 
-        html = page.content()
+        try:
+            # -------------------------------------------------
+            # Navigate
+            # -------------------------------------------------
+            page.goto(url, wait_until="networkidle")
 
-        page.pdf(
-            path=str(pdf_path),
-            format="A4",
-            print_background=True,
-            margin={
-                "top": "20mm",
-                "bottom": "20mm",
-                "left": "15mm",
-                "right": "15mm",
-            },
-        )
+            # -------------------------------------------------
+            # Cookie consent (BEST EFFORT)
+            # -------------------------------------------------
+            self.accept_cookies_if_present()
 
-        page.close()
-        return html
+            # -------------------------------------------------
+            # HARD REMOVE COOKIE / MODAL OVERLAYS (CRITICAL)
+            # -------------------------------------------------
+            page.evaluate(
+                """
+                () => {
+                    const selectors = [
+                        '#onetrust-consent-sdk',
+                        '.ot-sdk-container',
+                        '[role="dialog"]',
+                        '.ReactModal__Overlay'
+                    ];
+
+                    selectors.forEach(sel => {
+                        document.querySelectorAll(sel).forEach(el => el.remove());
+                    });
+
+                    // unlock scrolling just in case
+                    document.body.style.overflow = 'visible';
+                }
+                """
+            )
+
+            # small settle time (Axis implicitly gets this via Playwright waits)
+            page.wait_for_timeout(300)
+
+            # -------------------------------------------------
+            # Capture HTML (post-clean)
+            # -------------------------------------------------
+            html = page.content()
+
+            # -------------------------------------------------
+            # Generate PDF (FINAL PATH)
+            # -------------------------------------------------
+            pdf_path.parent.mkdir(parents=True, exist_ok=True)
+
+            page.pdf(
+                path=str(pdf_path),
+                format="A4",
+                print_background=True,
+                margin={
+                    "top": "20mm",
+                    "bottom": "20mm",
+                    "left": "15mm",
+                    "right": "15mm",
+                },
+            )
+
+            # -------------------------------------------------
+            # Sanity check (Axis-style invariant)
+            # -------------------------------------------------
+            if not pdf_path.exists() or pdf_path.stat().st_size < 10_000:
+                raise RuntimeError(f"PDF not created or empty: {pdf_path}")
+
+            return html
+
+        finally:
+            page.close()
+
+    def accept_cookies_if_present(self):
+        page = self.page
+
+        try:
+            # Button text is stable on BB
+            accept_button = page.locator("button:has-text('Accept All')")
+            if accept_button.count() > 0:
+                accept_button.first.click(timeout=3000)
+
+                # Wait for modal backdrop to disappear
+                page.wait_for_timeout(500)
+        except Exception:
+            # Fail silently — cookies may already be accepted
+            pass
