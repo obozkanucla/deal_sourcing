@@ -15,35 +15,27 @@ def get_existing_deal_ids(ws) -> set[str]:
     values = ws.col_values(1)  # Column A = deal_uid
     return {v.strip() for v in values[1:] if v.strip()}
 
+def row_from_deal(deal: dict, columns=DEAL_COLUMNS) -> list:
+    row = []
 
-def row_from_deal(deal: dict) -> list:
-    deal_uid = f"{deal['source']}:{deal['source_listing_id']}"
+    for col in columns:
+        if not col.push:
+            continue
 
-    return [
-        deal_uid,
-        deal.get("source"),
-        deal.get("source_listing_id"),
-        deal.get("source_url"),
-        deal.get("title"),
-        deal.get("industry"),
-        deal.get("sector"),
-        deal.get("location"),
-        deal.get("status"),
-        deal.get("owner"),
-        deal.get("priority"),
-        deal.get("notes"),
-        deal.get("last_touch"),
-        deal.get("first_seen"),
-        deal.get("last_seen"),
-        deal.get("last_updated"),
-        deal.get("decision"),
-        deal.get("decision_confidence"),
-        (
-            f'=HYPERLINK("{deal["drive_folder_url"]}", "Folder")'
-            if deal.get("drive_folder_url")
-            else ""
-        ),
-    ]
+        if col.name == "deal_uid":
+            row.append(f"{deal['source']}:{deal['source_listing_id']}")
+
+        elif col.name == "drive_folder_url":
+            url = deal.get("drive_folder_url")
+            if url:
+                row.append(f'=HYPERLINK("{url}", "Folder")')
+            else:
+                row.append("")
+
+        else:
+            row.append(deal.get(col.name))
+
+    return row
 
 def append_rows(ws, rows, chunk_size=200):
     for i in range(0, len(rows), chunk_size):
@@ -54,99 +46,109 @@ def append_rows(ws, rows, chunk_size=200):
         print(f"✅ Appended {len(rows[i : i + chunk_size])} rows")
         time.sleep(1)
 
+# -----------------------------
+# Helpers
+# -----------------------------
+
+def ensure_sheet_headers(ws, columns):
+    expected = [c.name for c in columns]
+
+    # 🔥 FULL RESET: clear sheet completely
+    ws.clear()
+
+    # Resize to exactly 1 row and N columns
+    ws.resize(rows=1, cols=len(expected))
+
+    # Write headers
+    ws.update("A1", [expected])
+
+    print("🧱 Sheet headers reset and written")
 
 # -----------------------------
 # PUSH: SQLite → Sheets
 # -----------------------------
 
-def push_sqlite_to_sheets(
-    repo,
-    ws,
-    *,
-    allowed_columns: Set[str]
-):
-    if not allowed_columns:
-        raise ValueError("allowed_columns must be explicitly provided")
-
+def push_sqlite_to_sheets(repo, ws):
     deals = repo.fetch_all_deals()
-    print(f"📦 Loaded {len(deals)} deals from SQLite")
-
     existing = get_existing_deal_ids(ws)
-    print(f"📄 Sheet already has {len(existing)} deals")
 
     rows = []
     for deal in deals:
         deal_uid = f"{deal['source']}:{deal['source_listing_id']}"
         if deal_uid in existing:
             continue
-        rows.append(row_from_deal(deal))
 
-    print(f"🆕 {len(rows)} new deals to export")
+        rows.append(row_from_deal(deal))
 
     if rows:
         append_rows(ws, rows)
-    else:
-        print("ℹ️ Nothing new to push")
-
 
 # -----------------------------
 # PULL: Sheets → SQLite
 # -----------------------------
 
-def pull_sheets_to_sqlite(
-    repo,
-    ws,
-    *,
-    allowed_columns: Set[str]
-):
-    if not allowed_columns:
-        raise ValueError("allowed_columns must be explicitly provided")
+def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
+    values = ws.get_all_values()
+    if not values:
+        print("⚠️ Sheet is empty")
+        return
 
-    rows = ws.get_all_records()
-    print(f"📥 Loaded {len(rows)} rows from Google Sheets")
+    headers = values[0]
+    rows = values[1:]
 
-    updated = 0
-    skipped = 0
+    header_set = set(headers)
+    col_idx = {h: i for i, h in enumerate(headers)}
+
+    # Only pull columns that:
+    # 1) are marked pull=True
+    # 2) are NOT system fields
+    # 3) actually exist in the sheet
+    pullable_columns = [
+        c for c in columns
+        if c.pull and not c.system and c.name in header_set
+    ]
+
+    updated = skipped = 0
 
     for row in rows:
-        deal_uid = row.get("deal_uid")
+        if "deal_uid" not in col_idx:
+            continue
+
+        deal_uid = row[col_idx["deal_uid"]] if col_idx["deal_uid"] < len(row) else ""
         if not deal_uid:
             continue
 
         try:
             source, source_listing_id = deal_uid.split(":", 1)
         except ValueError:
-            continue # malformed UID
+            continue
 
         db_deal = repo.fetch_by_source_and_listing(source, source_listing_id)
         if not db_deal:
-            continue  # never create from Sheets
+            continue
 
         updates = {}
 
-        for field in allowed_columns:
-            if field in SYSTEM_FIELDS:
-                continue  # 🚫 never pull these from Sheets
-            sheet_val = row.get(field)
-            db_val = db_deal.get(field)
+        for col in pullable_columns:
+            idx = col_idx[col.name]
+            sheet_val = row[idx] if idx < len(row) else ""
 
             if sheet_val == "":
+                if col.allow_blank_pull:
+                    if db_deal.get(col.name) is not None:
+                        updates[col.name] = None
                 continue
-            if sheet_val != db_val:
-                updates[field] = sheet_val
+
+            if sheet_val != db_deal.get(col.name):
+                updates[col.name] = sheet_val
 
         if updates:
-            repo.update_deal_fields(
-                db_deal["id"],  # ← SQLite primary key
-                updates
-            )
+            repo.update_deal_fields(db_deal["id"], updates)
             updated += 1
-            print(f"🔄 Updated {deal_uid}: {updates}")
         else:
             skipped += 1
 
     print(f"✅ Reverse sync complete — {updated} updated, {skipped} unchanged")
-
 
 # -----------------------------
 # PATCH: Folder links only
@@ -197,7 +199,13 @@ def update_folder_links(repo, ws):
         if not deal:
             continue
 
-        folder_url = deal.get("drive_folder_url")
+        # folder_url = deal.get("drive_folder_url")
+        folder_url = (
+            f'=HYPERLINK("{deal["drive_folder_url"]}", "Folder")'
+            if deal.get("drive_folder_url")
+            else ""
+                    )
+
         if not folder_url:
             continue
 

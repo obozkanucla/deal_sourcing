@@ -237,23 +237,33 @@ class SQLiteRepository:
             """
             SELECT             
                 id,
-            source,
-            source_listing_id,
-            source_url,
-            title,
-            industry,
-            sector,
-            status,
-            owner,
-            priority,
-            notes,
-            last_touch,
-            first_seen,
-            last_seen,
-            last_updated,
-            decision,
-            decision_confidence,
-            drive_folder_url
+                source,
+                source_listing_id,
+                source_url,
+                title,
+                industry,
+                sector,
+                status,
+                owner,
+                priority,
+                notes,
+                last_touch,
+                first_seen,
+                last_seen,
+                last_updated,
+                decision,
+                decision_confidence,
+                drive_folder_url,
+                incorporation_year,
+                -- base financials
+                revenue_k,
+                ebitda_k,
+                asking_price_k,
+    
+                -- derived financials
+                ebitda_margin,
+                revenue_multiple,
+                ebitda_multiple
             FROM deals
             ORDER BY first_seen ASC
             """
@@ -438,49 +448,45 @@ class SQLiteRepository:
         with self.get_conn() as conn:
             conn.execute(
                 """
-                INSERT INTO deals (deal_id,
-                                   source,
-                                   source_url,
-                                   source_listing_id,
-                                   intermediary,
-                                   company_name,
-                                   industry,
-                                   sector,
-                                   sector_source,
-                                   location,
-                                   incorporation_year,
-                                   first_seen,
-                                   last_updated,
-                                   outcome,
-                                   outcome_reason,
-                                   notes,
-                                   revenue_k,
-                                   ebitda_k,
-                                   ebitda_margin,
-                                   asking_price_k,
-                                   revenue_multiple,
-                                   ebitda_multiple,
-                                   drive_folder_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(deal_id) DO
-                UPDATE SET
+                INSERT INTO deals (
+                    deal_id,
+                    source,
+                    source_url,
+                    source_listing_id,
+                    intermediary,
+                    title,
+                    industry,
+                    sector,
+                    sector_source,
+                    location,
+                    incorporation_year,
+                    first_seen,
+                    last_updated,
+                    decision,
+                    decision_reason,
+                    notes,
+                    revenue_k,
+                    ebitda_k,
+                    asking_price_k,
+                    drive_folder_url
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(deal_id) DO UPDATE SET
                     intermediary = excluded.intermediary,
-                    company_name = excluded.company_name,
+                    title = excluded.title,
                     industry = excluded.industry,
                     sector = excluded.sector,
                     sector_source = excluded.sector_source,
                     location = excluded.location,
                     incorporation_year = excluded.incorporation_year,
                     last_updated = excluded.last_updated,
-                    outcome = excluded.outcome,
-                    outcome_reason = excluded.outcome_reason,
+                    decision = excluded.decision,
+                    decision_reason = excluded.decision_reason,
                     notes = excluded.notes,
                     revenue_k = excluded.revenue_k,
                     ebitda_k = excluded.ebitda_k,
-                    ebitda_margin = excluded.ebitda_margin,
                     asking_price_k = excluded.asking_price_k,
-                    revenue_multiple = excluded.revenue_multiple,
-                    ebitda_multiple = excluded.ebitda_multiple,
-                    drive_folder_url = excluded.drive_folder_url
+                    drive_folder_url = excluded.drive_folder_url;
                 """,
                 (
                     deal["deal_id"],  # deal_id
@@ -488,7 +494,7 @@ class SQLiteRepository:
                     f"legacy://{deal['deal_id']}",  # source_url ✅ REQUIRED
                     deal["deal_id"],  # source_listing_id ✅ REQUIRED
                     deal["intermediary"],
-                    deal["company_name"],
+                    deal["title"],
                     deal["industry"],
                     deal["sector"],
                     deal["sector_source"],  # "manual"
@@ -501,10 +507,7 @@ class SQLiteRepository:
                     deal["notes"],
                     deal["revenue_k"],
                     deal["ebitda_k"],
-                    deal["ebitda_margin"],
                     deal["asking_price_k"],
-                    deal["revenue_multiple"],
-                    deal["ebitda_multiple"],
                     deal["drive_folder_url"],
                 ),
             )
@@ -581,9 +584,9 @@ class SQLiteRepository:
                     sector_raw,
                     industry_raw,
                     location,
-                    revenue_latest,
-                    ebitda_latest,
-                    ebitda_margin_pct,
+                    revenue_k,
+                    ebitda_k,
+                    asking_price_k,
                     notes,
                     first_seen,
                     last_seen,
@@ -607,9 +610,9 @@ class SQLiteRepository:
                     deal["sector_raw"],
                     deal["industry_raw"],
                     deal["location"],
-                    deal["revenue_latest"],
-                    deal["ebitda_latest"],
-                    deal["ebitda_margin_pct"],
+                    deal["revenue_k"],
+                    deal["ebitda_k"],
+                    deal["asking_price_k"],
                     deal["notes"],
                     deal["first_seen"],                  # only used on INSERT
                     deal["last_seen"],                   # updated on re-seen
@@ -645,6 +648,29 @@ class SQLiteRepository:
                 WHERE deal_id = ?
                 """,
                 (first_seen, last_seen, deal_id),
+            )
+
+    def update_dmitry_enrichment(
+            self,
+            *,
+            deal_id: str,
+            revenue_k: float | None,
+            ebitda_k: float | None,
+            decision: str | None,
+            notes: str | None,
+    ):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET revenue_k    = COALESCE(deals.revenue_k, ?),
+                    ebitda_k     = COALESCE(deals.ebitda_k, ?),
+                    decision     = COALESCE(deals.decision, ?),
+                    notes        = COALESCE(deals.notes, ?),
+                    last_updated = CURRENT_TIMESTAMP
+                WHERE deal_id = ?
+                """,
+                (revenue_k, ebitda_k, decision, notes, deal_id),
             )
 
     def update_detail_fields_by_source(
@@ -688,3 +714,40 @@ class SQLiteRepository:
 
     def compute_deal_uid(self, deal: dict) -> str:
         return f"{deal['source']}:{deal['source_listing_id']}"
+
+    def recalculate_financial_metrics(self):
+        """
+        Recalculate derived financial metrics from canonical stored values.
+        Safe to run repeatedly.
+        """
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET ebitda_margin = CASE
+                                        WHEN revenue_k IS NOT NULL
+                                            AND revenue_k != 0
+                    AND ebitda_k IS NOT NULL THEN ROUND((ebitda_k * 100.0) / revenue_k, 2)
+                        ELSE NULL
+                END
+                ,
+
+                    revenue_multiple = CASE
+                        WHEN revenue_k IS NOT NULL
+                         AND revenue_k != 0
+                         AND asking_price_k IS NOT NULL
+                        THEN ROUND(asking_price_k / revenue_k, 2)
+                        ELSE NULL
+                END
+                ,
+
+                    ebitda_multiple = CASE
+                        WHEN ebitda_k IS NOT NULL
+                         AND ebitda_k != 0
+                         AND asking_price_k IS NOT NULL
+                        THEN ROUND(asking_price_k / ebitda_k, 2)
+                        ELSE NULL
+                END
+                """
+            )
+            conn.commit()

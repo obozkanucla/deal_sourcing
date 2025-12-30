@@ -9,6 +9,7 @@ Sheets sync contract:
 import time
 from pathlib import Path
 
+from src.domain.deal_columns import DEAL_COLUMNS
 from src.persistence.repository import SQLiteRepository
 from src.integrations.google_sheets import get_gspread_client
 from src.integrations.sheets_sync import (
@@ -17,33 +18,12 @@ from src.integrations.sheets_sync import (
     update_folder_links,
     backfill_system_columns
 )
+from src.integrations.sheets_sync import ensure_sheet_headers
 
 SPREADSHEET_ID = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
 WORKSHEET_NAME = "DealsV2"
 
 DB_PATH = Path("db/deals.sqlite")
-
-ALLOWED_COLUMNS = [
-    "deal_uid",
-    "source",
-    "source_listing_id",
-    "source_url",
-    "title",
-    "industry",
-    "sector",
-    "location",
-    "status",
-    "owner",
-    "priority",
-    "notes",
-    "last_touch",
-    "first_seen",
-    "last_seen",
-    "last_updated",
-    "decision",
-    "decision_confidence",
-    "drive_folder_url"
-]
 
 def main():
     repo = SQLiteRepository(DB_PATH)
@@ -52,22 +32,25 @@ def main():
     sh = gc.open_by_key(SPREADSHEET_ID)
     ws = sh.worksheet(WORKSHEET_NAME)
 
-    # Push new deals only
-    push_sqlite_to_sheets(
-        repo,
-        ws,
-        allowed_columns=ALLOWED_COLUMNS,
-    )
-
-    # Backfill Drive folder links
-    update_folder_links(repo, ws)
-
     # Pull analyst edits back
     pull_sheets_to_sqlite(
         repo,
         ws,
-        allowed_columns=ALLOWED_COLUMNS,
+        columns=DEAL_COLUMNS
     )
+
+
+    # ✅ SINGLE SOURCE OF TRUTH
+    ensure_sheet_headers(ws, DEAL_COLUMNS)
+
+    # Push new deals only
+    push_sqlite_to_sheets(
+        repo,
+        ws
+    )
+
+    # Backfill Drive folder links
+    update_folder_links(repo, ws)
 
     backfill_system_columns(
         repo,

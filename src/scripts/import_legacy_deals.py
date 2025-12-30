@@ -56,6 +56,34 @@ def parse_int(val):
     except Exception:
         return None
 
+import re
+
+def parse_money_k(val: str | None) -> float | None:
+    if not val:
+        return None
+
+    s = val.lower().strip()
+
+    # hard stop tokens
+    if any(x in s for x in ("poa", "na", "#div")):
+        return None
+
+    s = s.replace("£", "").replace(",", "").strip()
+
+    multiplier = 1.0
+    if "m" in s:
+        multiplier = 1000.0
+        s = s.replace("m", "")
+    elif "k" in s:
+        s = s.replace("k", "")
+
+    match = re.search(r"\d+(\.\d+)?", s)
+    if not match:
+        return None
+
+    return float(match.group()) * multiplier
+
+
 
 # =========================
 # MAIN IMPORT LOGIC
@@ -106,8 +134,9 @@ def main():
         deal = {
             "deal_id": deal_id,
             "source": "LegacySheet",
+            # ✅ canonical title
+            "title": company,
             "intermediary": intermediary,
-            "company_name": company,
             "industry": industry,
             "sector": sector,
             "sector_source": "manual",
@@ -117,14 +146,14 @@ def main():
             "last_updated": parse_date(val("Last update")),
             "outcome": val("Outcome"),
             "outcome_reason": val("Reason"),
+            "status": val("Outcome"),
             "notes": val("Update"),
-            "revenue_k": parse_float(val("Latest revenue (annual-000)")),
-            "ebitda_k": parse_float(val("EBITDA (Latest)")),
-            "ebitda_margin": parse_float(val("EBITDA Margin %")),
-            "asking_price_k": parse_float(val("Asking Price / Valuation")),
-            "revenue_multiple": parse_float(val("Revenue Multiple")),
-            "ebitda_multiple": parse_float(val("EBITDA Multiple")),
+            "revenue_k": parse_money_k(val("Latest revenue (annual-000)")),
+            "ebitda_k": parse_money_k(val("EBITDA (Latest)")),
+            "asking_price_k": parse_money_k(val("Asking Price / Valuation")),
             "drive_folder_url": val("G-Link URL"),  # ✅ FIXED
+            "decision": None,
+            "decision_reason": val("Reason"),
         }
 
         if DRY_RUN:

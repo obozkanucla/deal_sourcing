@@ -24,6 +24,17 @@ DRY_RUN = False
 def norm(x):
     return str(x or "").strip().lower()
 
+def map_interest_flag_to_decision(flag: str | None):
+    if not flag:
+        return None
+
+    flag = flag.strip().upper()
+
+    return {
+        "NO": "Pass",
+        "YES": "CIM",
+        "MAYBE": "Parked",
+    }.get(flag)
 
 def parse_money(val):
     try:
@@ -84,14 +95,18 @@ def main():
             sector_raw = row[0]
             location = row[1]
             description = row[2]
+            revenue_raw = parse_money(row[3])
+            ebitda_raw = parse_money(row[4]) if len(row) > 4 else None
 
-            revenue = parse_money(row[3])
-            ebitda = parse_money(row[4]) if len(row) > 4 else None
+            revenue = round(revenue_raw / 1000, 1) if revenue_raw is not None else None
+            ebitda = round(ebitda_raw / 1000, 1) if ebitda_raw is not None else None
             ebitda_margin = parse_pct(row[7]) if len(row) > 7 else None
             interest_flag = row[8] if len(row) > 8 else None
 
             deal_fp = fingerprint(sector_raw, location, revenue, ebitda)
             deal_id = f"Dmitry:{deal_fp}"
+
+            decision = map_interest_flag_to_decision(interest_flag)
 
             deal = {
                 "deal_id": deal_id,
@@ -105,10 +120,15 @@ def main():
                 "sector_raw": sector_raw,
                 "industry_raw": None,
                 "location": location,
-                "revenue_latest": revenue,
-                "ebitda_latest": ebitda,
-                "ebitda_margin_pct": ebitda_margin,
-                "notes": f"interest_flag={interest_flag}" if interest_flag else None,
+                "revenue_k": revenue,
+                "ebitda_k": ebitda,
+                "asking_price_k": None,
+                # ✅ canonical decision
+                "decision": decision,
+                "decision_reason": None,
+                "status": None,  # ❌ never touch
+                # optional provenance (debuggable, not operational)
+                "notes": None,
                 "first_seen": sheet_date,
                 "last_seen": sheet_date,
                 "manual_imported_at": now,
@@ -124,11 +144,22 @@ def main():
                 repo.insert_raw_deal(deal)
                 imported += 1
             else:
+                # 1️⃣ Enrich missing fields (safe, COALESCE)
+                repo.update_dmitry_enrichment(
+                    deal_id=deal_id,
+                    revenue_k=revenue,
+                    ebitda_k=ebitda,
+                    decision=decision,
+                    notes=None,
+                )
+
+                # 2️⃣ Update seen dates
                 repo.upsert_dmitry_seen(
                     deal_id=deal_id,
                     first_seen=min(existing["first_seen"], sheet_date),
                     last_seen=max(existing["last_seen"], sheet_date),
                 )
+
                 updated += 1
 
     print(f"✅ Dmitry import complete — imported={imported}, updated={updated}")
