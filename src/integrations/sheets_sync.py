@@ -500,6 +500,45 @@ def reset_sheet_state(ws, num_columns: int):
 
     print("🧼 Sheet fully reset (values + formatting + freezes)")
 
+def apply_ebitda_margin_color_scale(ws, col_idx):
+    """
+    Apply red → yellow → green color scale to EBITDA margin column.
+    """
+    requests = [
+        {
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [{
+                        "sheetId": ws.id,
+                        "startRowIndex": 1,            # skip header
+                        "startColumnIndex": col_idx - 1,
+                        "endColumnIndex": col_idx,
+                    }],
+                    "gradientRule": {
+                        "minpoint": {
+                            "type": "NUMBER",
+                            "value": "0",
+                            "color": {"red": 0.95, "green": 0.6, "blue": 0.6},  # red
+                        },
+                        "midpoint": {
+                            "type": "NUMBER",
+                            "value": "15",
+                            "color": {"red": 1.0, "green": 0.95, "blue": 0.6},  # yellow
+                        },
+                        "maxpoint": {
+                            "type": "NUMBER",
+                            "value": "40",
+                            "color": {"red": 0.7, "green": 0.9, "blue": 0.7},   # green
+                        },
+                    },
+                },
+                "index": 0,
+            }
+        }
+    ]
+
+    ws.spreadsheet.batch_update({"requests": requests})
+
 def apply_sheet_formatting(ws):
     col = header_to_col_idx(ws)
 
@@ -508,8 +547,9 @@ def apply_sheet_formatting(ws):
         if name in col:
             format_currency_column(ws, col[name])
 
-    # if "ebitda_margin" in col:
-    #     format_percentage_column(ws, col["ebitda_margin"])
+    if "ebitda_margin" in col:
+        # format_percentage_column(ws, col["ebitda_margin"])
+        apply_ebitda_margin_color_scale(ws, col["ebitda_margin"])
 
     # Workflow
     for name in ("status", "decision"):

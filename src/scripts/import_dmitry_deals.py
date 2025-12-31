@@ -99,8 +99,8 @@ def main():
             sector_raw = row[0]
             location = row[1]
             description = row[2]
-            revenue_raw = parse_money(row[3])
-            ebitda_raw = parse_money(row[4]) if len(row) > 4 else None
+            revenue_raw = parse_money(row[5])
+            ebitda_raw = parse_money(row[6]) if len(row) > 4 else None
 
             revenue = round(revenue_raw / 1000, 1) if revenue_raw is not None else None
             ebitda = round(ebitda_raw / 1000, 1) if ebitda_raw is not None else None

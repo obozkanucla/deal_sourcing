@@ -29,6 +29,9 @@ class SQLiteRepository:
                                 "decision",
                                 "decision_confidence",
                                 "drive_folder_url",
+                                "revenue_k",
+                                "ebitda_k",
+                                "asking_price_k",
                             }
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -306,24 +309,23 @@ class SQLiteRepository:
                 ),
             )
 
-    def update_deal_fields(self, deal_id: int, updates: dict):
+    def update_deal_fields(self, source: str, source_listing_id: str, updates: dict):
         safe_updates = {
-            k: v
-            for k, v in updates.items()
+            k: v for k, v in updates.items()
             if k in self.DEALS_DB_COLUMNS
         }
-
         if not safe_updates:
             return
 
         cols = ", ".join(f"{k} = ?" for k in safe_updates)
-        values = list(safe_updates.values()) + [deal_id]
+        values = list(safe_updates.values()) + [source, source_listing_id]
 
         sql = f"""
             UPDATE deals
             SET {cols},
                 last_updated = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE source = ?
+              AND source_listing_id = ?
         """
 
         with self.get_conn() as conn:
@@ -759,22 +761,30 @@ class SQLiteRepository:
             only_missing_financials: bool = True,
     ):
         """
-        Fetch deals that have descriptions and are candidates
-        for financial extraction.
+        Fetch deals that have usable descriptions
+        and are candidates for financial extraction.
         """
 
-        where = ["description IS NOT NULL", "TRIM(description) != ''"]
+        where = [
+            "description IS NOT NULL",
+            "TRIM(description) != ''",
+        ]
 
         if only_missing_financials:
             where.append("""
-                (revenue_k IS NULL
-                 OR ebitda_k IS NULL
-                 OR asking_price_k IS NULL)
+                (
+                    revenue_k IS NULL
+                    OR ebitda_k IS NULL
+                    OR asking_price_k IS NULL
+                )
             """)
+
+        params = []
 
         if sources:
             placeholders = ",".join("?" for _ in sources)
             where.append(f"source IN ({placeholders})")
+            params.extend(sources)
 
         sql = f"""
             SELECT
@@ -790,7 +800,6 @@ class SQLiteRepository:
             ORDER BY last_updated DESC
         """
 
-        params = sources or []
         with self.get_conn() as conn:
             rows = conn.execute(sql, params).fetchall()
 
