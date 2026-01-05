@@ -39,6 +39,16 @@ def extract_teaser_field(soup, heading: str) -> str | None:
             return text_or_none(field)
     return None
 
+def extract_mv_id(soup) -> str | None:
+    p = soup.select_one("div.teaser-ref p")
+    if not p:
+        return None
+
+    txt = p.get_text(strip=True)
+    if txt.startswith("ID: MV"):
+        return txt.replace("ID:", "").strip()
+
+    return None
 
 def compute_content_hash(*parts: str | None) -> str:
     h = hashlib.sha256()
@@ -92,6 +102,8 @@ def main():
                 continue
 
             soup = BeautifulSoup(page.content(), "html.parser")
+
+            mv_id = extract_mv_id(soup)
 
             # -----------------------------------
             # HERO
@@ -148,6 +160,11 @@ def main():
             # -----------------------------------
 
             updates = {}
+            lookup_listing_id = deal["source_listing_id"]
+
+            if mv_id and deal["source_listing_id"] != mv_id:
+                updates["source_listing_id"] = mv_id
+                print(f"🔁 Canonicalizing ID {deal['source_listing_id']} → {mv_id}")
 
             if title:
                 updates["title"] = title
@@ -172,7 +189,7 @@ def main():
                 if not DRY_RUN:
                     repo.update_detail_fields_by_source(
                         source=deal["source"],
-                        source_listing_id=deal["source_listing_id"],
+                        source_listing_id=lookup_listing_id,  # always the ORIGINAL key
                         fields=updates,
                     )
                     enriched += 1
@@ -182,7 +199,6 @@ def main():
             time.sleep(random.uniform(*SLEEP_BETWEEN))
 
     print(f"\n✅ BusinessesForSale enrichment complete — updated {enriched} deals")
-
 
 if __name__ == "__main__":
     main()

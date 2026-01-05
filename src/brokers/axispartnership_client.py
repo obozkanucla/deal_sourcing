@@ -1,4 +1,5 @@
 import time
+import os
 import random
 import re
 from pathlib import Path
@@ -8,8 +9,7 @@ from bs4 import BeautifulSoup
 
 class AxisPartnershipClient:
     BASE_URL = "https://www.axispartnership.co.uk/buying/"
-
-    HEADLESS = False
+    HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     BASE_SLEEP = 1.5
     JITTER = 1.0
 

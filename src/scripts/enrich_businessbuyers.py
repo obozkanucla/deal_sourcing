@@ -1,271 +1,292 @@
-# src/scripts/enrich_businesses4sale.py
-
+# src/scripts/enrich_businessbuyers.py
+import sqlite3
 from pathlib import Path
-import time
-import random
-import hashlib
+from datetime import datetime
+import re
+from typing import Optional
 
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright, TimeoutError
 
-from src.persistence.repository import SQLiteRepository
-from src.enrichment.financial_extractor import extract_financial_metrics
+from src.brokers.businessbuyers_client import BusinessBuyersClient
+from src.config import BB_USERNAME, BB_PASSWORD
+from src.persistence.deal_artifacts import record_deal_artifact
 
 from src.integrations.drive_folders import get_drive_parent_folder_id
 from src.integrations.google_drive import (
     find_or_create_deal_folder,
     upload_pdf_to_drive,
 )
-from src.persistence.deal_artifacts import record_deal_artifact
 
-# -----------------------------------
+from src.sector_mappings.businessbuyers import map_businessbuyers_sector
+
+# -------------------------------------------------
 # CONFIG
-# -----------------------------------
+# -------------------------------------------------
 
-DRY_RUN = False         # 🔒 flip to False when confident
-MAX_DEALS = 100
-SLEEP_BETWEEN = (3, 6)
-
-DETAIL_WAIT_SELECTOR = "#hero, div.teaser-content"
-
-PDF_ROOT = Path("/tmp/businesses4sale_pdfs")
+DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
+PDF_ROOT = Path("/tmp/bb_pdfs")
 PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
-# -----------------------------------
-# HELPERS
-# -----------------------------------
 
-def text_or_none(el):
-    return el.get_text(" ", strip=True) if el else None
+# -------------------------------------------------
+# EXTRACTION HELPERS
+# -------------------------------------------------
 
-
-def extract_teaser_field(soup, heading: str) -> str | None:
+def _extract_ref_id(soup: BeautifulSoup) -> Optional[str]:
     """
-    Extracts text from a <div class="teaser-field"> by <h3> title
+    Extracts BusinessBuyers REF ID, e.g. 'REF: 51106'
     """
-    for field in soup.select("div.teaser-field"):
-        h3 = field.select_one("h3")
-        if h3 and h3.get_text(strip=True).lower() == heading.lower():
-            return text_or_none(field)
-    return None
+    ref_el = soup.find("p", string=re.compile(r"REF:\s*\d+", re.I))
+    if not ref_el:
+        return None
+
+    m = re.search(r"REF:\s*(\d+)", ref_el.get_text())
+    return m.group(1) if m else None
 
 
-def compute_content_hash(*parts: str | None) -> str:
-    h = hashlib.sha256()
-    for p in parts:
-        if p:
-            h.update(p.encode("utf-8"))
-    return h.hexdigest()
+def _extract_raw_sector(soup: BeautifulSoup) -> Optional[str]:
+    """
+    Extracts broker-declared sector from BusinessBuyers listing page.
+    This is authoritative and must be preferred over keyword inference.
+    """
+
+    h5 = soup.select_one(".sub-sector-lease h5")
+    if not h5:
+        return None
+
+    sector = h5.get_text(strip=True)
+    return sector or None
 
 
-# -----------------------------------
-# MAIN
-# -----------------------------------
+def _extract_title(soup: BeautifulSoup) -> Optional[str]:
+    h1 = soup.find("h1")
+    return h1.get_text(strip=True) if h1 else None
 
-def main():
-    repo = SQLiteRepository(Path("db/deals.sqlite"))
-    conn = repo.get_conn()
-    deals = repo.fetch_deals_needing_details_for_source(
-        source="BusinessesForSale",
-        limit=MAX_DEALS,
+
+def _extract_description(soup: BeautifulSoup) -> Optional[str]:
+    points = []
+    for div in soup.select("#overview .selling-point"):
+        txt = div.get_text(" ", strip=True)
+        if txt:
+            points.append(txt)
+
+    if not points:
+        return None
+
+    seen = set()
+    clean = []
+    for p in points:
+        if p not in seen:
+            clean.append(p)
+            seen.add(p)
+
+    return "\n".join(clean)
+
+
+def _extract_price(soup: BeautifulSoup) -> tuple[Optional[str], Optional[float]]:
+    price_el = soup.select_one(".price-ref p")
+    if not price_el:
+        return None, None
+
+    raw = price_el.get_text(strip=True)
+    m = re.search(r"£\s*([\d,]+)", raw)
+    if not m:
+        return None, None
+
+    price = f"£{m.group(1)}"
+    price_k = float(m.group(1).replace(",", "")) / 1_000
+    return price, price_k
+
+
+# -------------------------------------------------
+# ENRICHMENT
+# -------------------------------------------------
+
+def enrich_businessbuyers(limit: Optional[int] = None) -> None:
+    print(f"📀 SQLite DB path: {DB_PATH}")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    rows = conn.execute(
+        """
+        SELECT
+            id,
+            source_url,
+            title
+        FROM deals
+        WHERE source = 'BusinessBuyers'
+          AND (
+                needs_detail_refresh = 1
+                OR description IS NULL
+                OR detail_fetched_at IS NULL
+          )
+        ORDER BY last_seen DESC
+        """
+    ).fetchall()
+
+    if limit:
+        rows = rows[:limit]
+
+    print(f"🔍 Found {len(rows)} BusinessBuyers deals needing enrichment")
+
+    if not rows:
+        conn.close()
+        print("✅ Nothing to enrich")
+        return
+
+    bb = BusinessBuyersClient(
+        username=BB_USERNAME,
+        password=BB_PASSWORD,
+        click_budget=None,
     )
+    bb.login()
 
-    print(f"🔍 Deals to enrich: {len(deals)}")
+    try:
+        for r in rows:
+            row_id = r["id"]
+            url = r["source_url"]
 
-    enriched = 0
+            print("\n➡️ Enriching BusinessBuyers deal")
+            print(url)
 
-    for i, deal in enumerate(deals, start=1):
-        url = deal["source_url"]
-        slug = deal["source_listing_id"]
+            # -------------------------------------------------
+            # FETCH + PDF (CLIENT GUARANTEE)
+            # -------------------------------------------------
+            # First fetch to discover REF ID
+            html = bb.fetch_detail_anon_with_pdf(
+                url,
+                PDF_ROOT / "scratch.pdf",  # temporary, will be replaced
+            )
+            soup = BeautifulSoup(html, "html.parser")
 
-        print(f"\n➡️ [{i}/{len(deals)}] {slug}")
-        print(f"🌐 {url}")
+            ref_id = _extract_ref_id(soup)
+            if not ref_id:
+                raise RuntimeError("BusinessBuyers REF ID not found")
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
-            context = browser.new_context(
-                viewport={"width": 1280, "height": 900},
-                user_agent=(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
+            deal_identity = f"BB-{ref_id}"
+            pdf_path = PDF_ROOT / f"{deal_identity}.pdf"
+
+            # Final fetch with correct PDF name
+            html = bb.fetch_detail_anon_with_pdf(url, pdf_path)
+            soup = BeautifulSoup(html, "html.parser")
+
+            if not pdf_path.exists() or pdf_path.stat().st_size < 10_000:
+                raise RuntimeError(f"PDF not created or empty: {pdf_path}")
+
+            # -------------------------------------------------
+            # EXTRACT
+            # -------------------------------------------------
+            title = _extract_title(soup) or r["title"]
+            description = _extract_description(soup)
+            asking_price, asking_price_k = _extract_price(soup)
+
+            raw_sector = _extract_raw_sector(soup)
+            mapping = map_businessbuyers_sector(raw_sector=raw_sector)
+
+            fetched_at = datetime.utcnow().isoformat(timespec="seconds")
+
+            # -------------------------------------------------
+            # DRIVE
+            # -------------------------------------------------
+            parent_folder_id = get_drive_parent_folder_id(
+                industry=mapping["industry"],
+                broker="BusinessBuyers",
+            )
+
+            deal_folder_id = find_or_create_deal_folder(
+                parent_folder_id=parent_folder_id,
+                deal_id=deal_identity,
+                deal_title=title,
+            )
+
+            pdf_drive_url = upload_pdf_to_drive(
+                local_path=pdf_path,
+                filename=f"{ref_id}.pdf",
+                folder_id=deal_folder_id,
+            )
+
+            drive_file_id = pdf_drive_url.split("/d/")[1].split("/")[0]
+
+            record_deal_artifact(
+                conn=conn,
+                deal_id=row_id,
+                broker="BusinessBuyers",
+                artifact_type="pdf",
+                artifact_name=f"{ref_id}.pdf",
+                drive_file_id=drive_file_id,
+                drive_url=pdf_drive_url,
+                industry=mapping["industry"],
+                sector=mapping["sector"],
+                created_by="enrich_businessbuyers.py",
+            )
+
+            pdf_path.unlink(missing_ok=True)
+
+            # -------------------------------------------------
+            # DB UPDATE (ATOMIC)
+            # -------------------------------------------------
+            cur = conn.execute(
+                """
+                UPDATE deals
+                SET
+                    source_listing_id           = ?,
+
+                    title                       = ?,
+                    description                 = ?,
+                    asking_price                = ?,
+                    asking_price_k              = ?,
+
+                    industry                    = ?,
+                    sector                      = ?,
+                    sector_source               = 'broker',
+                    sector_inference_confidence = ?,
+                    sector_inference_reason     = ?,
+
+                    drive_folder_id             = ?,
+                    drive_folder_url            =
+                        'https://drive.google.com/drive/folders/' || ?,
+                    pdf_drive_url               = ?,
+                    pdf_path                    = NULL,
+
+                    detail_fetched_at           = ?,
+                    needs_detail_refresh        = 0,
+                    detail_fetch_reason         = NULL,
+                    last_updated                = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (
+                    ref_id,
+
+                    title,
+                    description,
+                    asking_price,
+                    asking_price_k,
+
+                    mapping["industry"],
+                    mapping["sector"],
+                    mapping["confidence"],
+                    mapping["reason"],
+
+                    deal_folder_id,
+                    deal_folder_id,
+                    pdf_drive_url,
+                    fetched_at,
+                    row_id,
                 ),
             )
-            page = context.new_page()
 
-            try:
-                page.goto(url, timeout=60_000)
-                page.wait_for_selector(DETAIL_WAIT_SELECTOR, timeout=20_000)
-            except TimeoutError:
-                print("⚠️ Detail selector not found — skipping")
-                browser.close()
-                continue
+            if cur.rowcount != 1:
+                raise RuntimeError(f"Expected 1 row updated, got {cur.rowcount}")
 
-            # -------------------------------------------------
-            # ✅ PDF CAPTURE (NO SCRAPING LOGIC TOUCHED)
-            # -------------------------------------------------
+            conn.commit()
+            print(f"✅ Enriched + uploaded ({deal_identity})")
 
-            pdf_path = PDF_ROOT / f"{slug}.pdf"
-            page.emulate_media(media="screen")
-            page.add_style_tag(content="""
-            header,
-            footer,
-            nav,
-            .cookie-banner,
-            #onetrust-consent-sdk,
-            .back-link,
-            .request-info,
-            .cta,
-            button {
-                display: none !important;
-            }
-            """)
-            page.pdf(
-                path=str(pdf_path),
-                format="A4",
-                margin={
-                    "top": "20mm",
-                    "bottom": "20mm",
-                    "left": "15mm",
-                    "right": "15mm",
-                },
-                print_background=True,
-            )
+    finally:
+        conn.close()
 
-            if pdf_path.exists():
-                size_kb = pdf_path.stat().st_size / 1024
-                print(f"🧾 PDF generated: {pdf_path} ({size_kb:.1f} KB)")
-            else:
-                print("⚠️ PDF generation failed")
-
-            soup = BeautifulSoup(page.content(), "html.parser")
-
-            # -----------------------------------
-            # HERO
-            # -----------------------------------
-
-            title = text_or_none(soup.select_one("#hero h1"))
-            location = text_or_none(soup.select_one("#hero p.location"))
-            hero_desc = text_or_none(soup.select_one("#hero p"))
-
-            # -----------------------------------
-            # DESCRIPTION
-            # -----------------------------------
-
-            business_desc = extract_teaser_field(soup, "Business Description")
-            description = business_desc or hero_desc
-
-            # -----------------------------------
-            # FINANCIALS (UK + INTL)
-            # -----------------------------------
-
-            financial_chunks: list[str] = []
-
-            # (1) UK inline financials
-            for dl in soup.select("div.financials dl"):
-                dt = dl.select_one("dt")
-                dd = dl.select_one("dd")
-                if dt and dd:
-                    financial_chunks.append(
-                        f"{dt.get_text(strip=True)} {dd.get_text(strip=True)}"
-                    )
-
-            # (2) Narrative financial summary
-            financial_summary = extract_teaser_field(soup, "Financial Summary")
-            if financial_summary:
-                financial_chunks.append(financial_summary)
-
-            financial_text = " ".join(financial_chunks).strip() or None
-
-            extracted = extract_financial_metrics(financial_text or "")
-
-            # -----------------------------------
-            # CONTENT HASH
-            # -----------------------------------
-
-            content_hash = compute_content_hash(
-                title,
-                location,
-                description,
-                financial_text,
-            )
-
-            # -----------------------------------
-            # UPDATES
-            # -----------------------------------
-
-            updates = {}
-
-            if title:
-                updates["title"] = title
-
-            if location:
-                updates["location"] = location
-
-            if description:
-                updates["description"] = description
-
-            updates["content_hash"] = content_hash
-            updates["needs_detail_refresh"] = 0
-
-            for field in ("revenue_k", "ebitda_k", "asking_price_k"):
-                val = extracted.get(field)
-                if val and deal.get(field) is None:
-                    updates[field] = val["value"]
-
-            if updates:
-                print("✍️ UPDATES:", updates)
-
-                if not DRY_RUN:
-                    parent_folder_id = get_drive_parent_folder_id(
-                        industry=deal.get("industry") or "Other",
-                        broker="BusinessesForSale",
-                    )
-
-                    deal_folder_id = find_or_create_deal_folder(
-                        parent_folder_id=parent_folder_id,
-                        deal_id=f"BFS-{slug}",
-                        deal_title=title,
-                    )
-
-                    pdf_drive_url = upload_pdf_to_drive(
-                        local_path=str(pdf_path),
-                        filename=f"{slug}.pdf",
-                        folder_id=deal_folder_id,
-                    )
-
-                    drive_file_id = pdf_drive_url.split("/d/")[1].split("/")[0]
-
-                    record_deal_artifact(
-                        conn=conn,
-                        deal_id=deal["id"],
-                        broker="BusinessesForSale",
-                        artifact_type="pdf",
-                        artifact_name=f"{slug}.pdf",
-                        drive_file_id=drive_file_id,
-                        drive_url=pdf_drive_url,
-                        industry=deal.get("industry"),
-                        sector=deal.get("sector"),
-                        created_by="enrich_businesses4sale.py",
-                    )
-                    conn.commit()
-                    time.sleep(0.1)
-                    updates["pdf_drive_url"] = pdf_drive_url
-                    updates["drive_folder_url"] = (
-                            "https://drive.google.com/drive/folders/" + deal_folder_id
-                    )
-                    repo.update_detail_fields_by_source(
-                        source=deal["source"],
-                        source_listing_id=deal["source_listing_id"],
-                        fields=updates,
-                    )
-                    enriched += 1
-
-            browser.close()
-            time.sleep(random.uniform(*SLEEP_BETWEEN))
-
-    print(f"\n✅ BusinessesForSale enrichment complete — updated {enriched} deals")
+    print("\n🏁 BusinessBuyers enrichment complete")
 
 
 if __name__ == "__main__":
-    main()
+    enrich_businessbuyers()

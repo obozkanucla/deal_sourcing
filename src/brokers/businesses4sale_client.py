@@ -22,7 +22,8 @@ class BusinessesForSaleClient:
         max_pages: int | None = None,
         sleep_between_pages: float = 3.0,
     ):
-        self.headless = headless
+        # self.headless = headless
+        self.headless = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
         self.slow_mo_ms = slow_mo_ms
         self.max_pages = max_pages
         self.sleep_between_pages = sleep_between_pages

@@ -1,6 +1,7 @@
 import time
 import random
 import re
+import os
 from playwright.sync_api import sync_playwright
 
 
@@ -66,7 +67,8 @@ class KnightsbridgeClient:
         "Wholesale & Retail": "2250",
         "Windows & Doors": "2457",
     }
-    HEADLESS = False
+    # HEADLESS = False
+    HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     BASE_SLEEP = 1.2
     JITTER = 0.8
 
@@ -75,7 +77,7 @@ class KnightsbridgeClient:
         self.browser = None
         self.page = None
         self._playwright = None
-
+        self.HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     # ------------------------------------------------------------------
     # LIFECYCLE
     # ------------------------------------------------------------------

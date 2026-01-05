@@ -1,4 +1,5 @@
 import time
+import os
 import random
 from playwright.sync_api import sync_playwright
 from pathlib import Path
@@ -10,7 +11,8 @@ class DealOpportunitiesClient:
 
     BASE_URL = "https://www.dealopportunities.co.uk/search/advanced"
 
-    HEADLESS = False
+    # HEADLESS = False
+    HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     MAX_PAGES_PER_RUN = 50
     BASE_SLEEP = 8
     JITTER = 6
@@ -23,6 +25,7 @@ class DealOpportunitiesClient:
         self.browser = None
         self.page = None
         self._playwright = None
+        self.HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
 
     def _cooldown(self):
         time.sleep(10 + random.random() * 6)

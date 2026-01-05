@@ -6,31 +6,49 @@ import os
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = PROJECT_ROOT / "src" / "scripts"
 
-def run_script(name: str, script_name: str, env=None):
+SCRIPTS = [
+    # Phase 0
+    "import_legacy_deals.py",
+    "import_dmitry_deals.py",
+
+    # Phase 1
+    "import_axispartnership.py",
+    "import_businessbuyers.py",
+    "import_businesses4sale.py",
+    "import_dealopportunities.py",
+    "import_knightsbridge.py",
+
+    # Phase 2
+    "enrich_axispartnership.py",
+    "enrich_businessbuyers.py",
+    "enrich_businesses4sale.py",
+    "enrich_dealopportunities.py",
+    "enrich_knightsbridge.py",
+
+    # Phase 3
+    "infer_sectors.py",
+    "enrich_financials_from_description.py",
+    "recalculate_financial_metrics.py",
+
+    # Phase 4
+    "sync_to_sheets.py",
+]
+def run_script(script_name: str, env=None):
     script_path = SCRIPTS_DIR / script_name
-    print(f"\n🚀 Running {name}")
+    print(f"\n🚀 Running {script_name}")
     subprocess.check_call(
         [sys.executable, str(script_path)],
         env={**os.environ, **(env or {})},
     )
-    print(f"✅ Finished {name}")
+    print(f"✅ Finished {script_name}")
 
 def main():
-    # run_script("Legacy Deals Import", "import_legacy_deals.py")
-    # run_script("Dmitry Deals Import", "import_dmitry_deals.py")
-    # run_script("BusinessBuyers Index", "import_businessbuyers.py")
-    # run_script("DealOpportunities Index", "import_dealopportunities.py")
-    run_script(
-        "BusinessBuyers Detail",
-        "enrich_businessbuyers.py",
-        env={"ENRICH_LIMIT": "none"},
-    )
-    run_script(
-        "DealOpportunities Detail",
-        "enrich_dealopportunities.py",
-        env={"ENRICH_LIMIT": "none"},
-    )
-    run_script("Sector Inference", "infer_sectors.py")
+    for script in SCRIPTS:
+        run_script(script)
+
+    print("\n✅ Full pipeline completed successfully")
 
 if __name__ == "__main__":
+    import os
+    os.environ["PLAYWRIGHT_HEADLESS"] = "1" # Silent run
     main()

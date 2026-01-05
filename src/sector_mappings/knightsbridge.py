@@ -63,6 +63,24 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "confidence": 0.8,
         "reason": "Events, experiential and promotional services",
     },
+    "Food & Drink": {
+        "industry": "Food_Beverage",
+        "sector": "Food & Drink",
+        "confidence": 0.9,
+        "reason": "Broker-declared sector",
+    },
+    "E-commerce": {
+        "industry": "Consumer_Retail",
+        "sector": "E-commerce",
+        "confidence": 0.9,
+        "reason": "Broker-declared sector",
+    },
+    "Engineering": {
+        "industry": "Industrials",
+        "sector": "Engineering",
+        "confidence": 0.9,
+        "reason": "Broker-declared sector",
+    },
 
     # ---------------------------------------------------------------
     # CONSTRUCTION & BUILT ENVIRONMENT
