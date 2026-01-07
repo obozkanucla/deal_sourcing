@@ -133,12 +133,19 @@ def main():
         )
         outcome = val("Outcome")
         outcome_reason = val("Reason")
+        legacy_notes = val("Update")
+
+        notes_parts = []
+        if intermediary:
+            notes_parts.append(f"Intermediary: {intermediary}")
+        if legacy_notes:
+            notes_parts.append(legacy_notes)
+
         deal = {
             "deal_id": deal_id,
             "source": "LegacySheet",
             # ✅ canonical title
             "title": company,
-            "intermediary": intermediary,
             "industry": industry,
             "sector": sector,
             "sector_source": "manual",
@@ -149,7 +156,7 @@ def main():
             "outcome": outcome,  # → status
             "outcome_reason": outcome_reason,
             "status": val("Outcome"),
-            "notes": val("Update"),
+            "notes": "\n".join(notes_parts) if notes_parts else None,
             "revenue_k": parse_money_k(val("Latest revenue (annual-000)")),
             "ebitda_k": parse_money_k(val("EBITDA (Latest)")),
             "asking_price_k": parse_money_k(val("Asking Price / Valuation")),

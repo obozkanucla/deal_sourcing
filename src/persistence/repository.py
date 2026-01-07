@@ -23,15 +23,15 @@ class SQLiteRepository:
                                 "owner",
                                 "priority",
                                 "notes",
-                                "last_touch",
                                 "first_seen",
                                 "last_seen",
                                 "decision",
-                                "decision_confidence",
                                 "drive_folder_url",
                                 "revenue_k",
                                 "ebitda_k",
                                 "asking_price_k",
+                                "last_updated_source",
+                                "last_updated"
                             }
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -250,12 +250,10 @@ class SQLiteRepository:
                 owner,
                 priority,
                 notes,
-                last_touch,
                 first_seen,
                 last_seen,
                 last_updated,
                 decision,
-                decision_confidence,
                 drive_folder_url,
                 incorporation_year,
                 -- base financials
@@ -309,7 +307,13 @@ class SQLiteRepository:
                 ),
             )
 
-    def update_deal_fields(self, source: str, source_listing_id: str, updates: dict):
+    def update_deal_fields(
+            self,
+            *,
+            source: str,
+            source_listing_id: str,
+            updates: dict,
+    ):
         safe_updates = {
             k: v for k, v in updates.items()
             if k in self.DEALS_DB_COLUMNS
@@ -323,7 +327,8 @@ class SQLiteRepository:
         sql = f"""
             UPDATE deals
             SET {cols},
-                last_updated = CURRENT_TIMESTAMP
+                last_updated = CURRENT_TIMESTAMP,
+                last_updated_source = 'MANUAL'
             WHERE source = ?
               AND source_listing_id = ?
         """
@@ -460,7 +465,6 @@ class SQLiteRepository:
                                    source,
                                    source_url,
                                    source_listing_id,
-                                   intermediary,
                                    title,
                                    industry,
                                    sector,
@@ -476,9 +480,8 @@ class SQLiteRepository:
                                    ebitda_k,
                                    asking_price_k,
                                    drive_folder_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(deal_id) DO
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(deal_id) DO
                 UPDATE SET
-                    intermediary = excluded.intermediary,
                     title = excluded.title,
                     industry = excluded.industry,
                     sector = excluded.sector,
@@ -499,7 +502,6 @@ class SQLiteRepository:
                     deal["source"],  # "LegacySheet"
                     f"legacy://{deal['deal_id']}",  # source_url
                     deal["deal_id"],  # source_listing_id
-                    deal["intermediary"],
                     deal["title"],
                     deal["industry"],
                     deal["sector"],
@@ -810,3 +812,31 @@ class SQLiteRepository:
             rows = conn.execute(sql, params).fetchall()
 
         return [dict(r) for r in rows]
+
+    def update_deal_fields_auto(
+            self,
+            *,
+            deal_id: int,
+            updates: dict,
+    ):
+        safe_updates = {
+            k: v for k, v in updates.items()
+            if k in self.DEALS_DB_COLUMNS
+        }
+        if not safe_updates:
+            return
+
+        cols = ", ".join(f"{k} = ?" for k in safe_updates)
+        values = list(safe_updates.values())
+
+        sql = f"""
+            UPDATE deals
+            SET {cols},
+                last_updated = CURRENT_TIMESTAMP,
+                last_updated_source = 'AUTO'
+            WHERE id = ?
+        """
+
+        with self.get_conn() as conn:
+            conn.execute(sql, values + [deal_id])
+            conn.commit()

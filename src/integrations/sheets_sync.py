@@ -95,6 +95,16 @@ def push_sqlite_to_sheets(repo, ws):
 # -----------------------------
 
 def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
+    """
+    Reverse sync: Google Sheets → SQLite
+
+    Contract:
+    - Only analyst-editable fields (pull=True, system=False) are considered
+    - SQLite is updated ONLY if sheet values differ from DB
+    - last_updated is bumped ONLY when a real change occurs
+    - Safe to run repeatedly (idempotent)
+    """
+
     values = ws.get_all_values()
     if not values:
         print("⚠️ Sheet is empty")
@@ -106,49 +116,56 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
     header_set = set(headers)
     col_idx = {h: i for i, h in enumerate(headers)}
 
-    # Only pull columns that:
-    # 1) are marked pull=True
-    # 2) are NOT system fields
-    # 3) actually exist in the sheet
+    # Pullable = analyst-editable columns only
     pullable_columns = [
         c for c in columns
         if c.pull and not c.system and c.name in header_set
     ]
 
-    updated = skipped = 0
+    updated = 0
+    skipped = 0
 
     for row in rows:
+        # deal_uid is mandatory
         if "deal_uid" not in col_idx:
             continue
 
-        deal_uid = row[col_idx["deal_uid"]] if col_idx["deal_uid"] < len(row) else ""
+        uid_idx = col_idx["deal_uid"]
+        deal_uid = row[uid_idx].strip() if uid_idx < len(row) else ""
         if not deal_uid:
             continue
 
         try:
             source, source_listing_id = deal_uid.split(":", 1)
         except ValueError:
-            continue
+            continue  # malformed UID
 
         db_deal = repo.fetch_by_source_and_listing(source, source_listing_id)
         if not db_deal:
-            continue
+            continue  # DB is source of truth for row existence
 
         updates = {}
 
         for col in pullable_columns:
             idx = col_idx[col.name]
-            sheet_val = row[idx] if idx < len(row) else ""
+            sheet_val = row[idx].strip() if idx < len(row) else ""
 
+            db_val = db_deal.get(col.name)
+
+            # Blank handling
             if sheet_val == "":
-                if col.allow_blank_pull and db_deal.get(col.name) is not None:
+                if col.allow_blank_pull and db_val is not None:
                     updates[col.name] = None
                 continue
 
-            if sheet_val != db_deal.get(col.name):
+            # Normalize comparison (Sheets always gives strings)
+            if str(sheet_val) != str(db_val):
                 updates[col.name] = sheet_val
 
         if updates:
+            updates["last_updated_source"] = "MANUAL"
+
+            # ✅ Analyst made a real change → persist + bump last_updated
             repo.update_deal_fields(
                 source=source,
                 source_listing_id=source_listing_id,
@@ -562,3 +579,41 @@ def apply_base_sheet_formatting(ws):
     freeze_header_row(ws)
     format_header_row(ws)
     print("🧊 Header frozen & styled")
+
+def highlight_analyst_editable_columns(ws, columns=DEAL_COLUMNS):
+    col_map = header_to_col_idx(ws)
+
+    analyst_cols = [
+        c.name for c in columns
+        if c.pull and not c.system and c.name in col_map
+    ]
+
+    requests = []
+
+    for name in analyst_cols:
+        col_idx = col_map[name] - 1  # zero-based
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": 1,  # skip header
+                    "startColumnIndex": col_idx,
+                    "endColumnIndex": col_idx + 1,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "backgroundColor": {
+                            "red": 0.90,
+                            "green": 0.95,
+                            "blue": 1.00
+                        }
+                    }
+                },
+                "fields": "userEnteredFormat.backgroundColor"
+            }
+        })
+
+    if requests:
+        ws.spreadsheet.batch_update({"requests": requests})
+
+    print(f"🖍️ Highlighted {len(analyst_cols)} analyst-editable columns")

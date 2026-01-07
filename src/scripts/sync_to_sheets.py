@@ -19,12 +19,24 @@ from src.integrations.sheets_sync import (
     backfill_system_columns,
     apply_sheet_formatting,
     apply_base_sheet_formatting,
-    reset_sheet_state
+    reset_sheet_state,
+    highlight_analyst_editable_columns
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
-SPREADSHEET_ID = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
+SPREADSHEET_ID_Production = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
 WORKSHEET_NAME = "Deals"
+SPREADSHEET_ID_Staging = "1Iioxt688xxw9fVbiixAMGrycwl22GqSh91p4EYsEAH0"
+
+import os
+
+PIPELINE_ENV = os.getenv("PIPELINE_ENV", "local")  # local | github
+SHEET_MODE = os.getenv("SHEET_MODE", "test")       # prod | test
+
+if SHEET_MODE == "prod":
+    SPREADSHEET_ID = SPREADSHEET_ID_Production
+else:
+    SPREADSHEET_ID = SPREADSHEET_ID_Staging
 
 DB_PATH = Path("db/deals.sqlite")
 
@@ -71,6 +83,8 @@ def main():
             "leverage_pct",
         ]
     )
+
+    highlight_analyst_editable_columns(ws)
 
 
 if __name__ == "__main__":
