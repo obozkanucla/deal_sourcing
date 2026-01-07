@@ -8,20 +8,20 @@ SCRIPTS_DIR = PROJECT_ROOT / "src" / "scripts"
 
 SCRIPTS = [
     # Phase 0
-    # "import_legacy_deals.py",
-    # "import_dmitry_deals.py",
-    #
-    # # Phase 1
-    # "import_axispartnership.py",
-    # "import_businessbuyers.py",
-    # "import_businesses4sale.py",
-    # "import_dealopportunities.py",
-    # "import_knightsbridge.py",
-    #
-    # # Phase 2
-    # "enrich_axispartnership.py",
-    # "enrich_businessbuyers.py",
-    # "enrich_businesses4sale.py",
+    "import_legacy_deals.py",
+    "import_dmitry_deals.py",
+
+    # Phase 1
+    "import_axispartnership.py",
+    "import_businessbuyers.py",
+    "import_businesses4sale.py",
+    "import_dealopportunities.py",
+    "import_knightsbridge.py",
+
+    # Phase 2
+    "enrich_axispartnership.py",
+    "enrich_businessbuyers.py",
+    "enrich_businesses4sale.py",
     "enrich_dealopportunities.py",
     "enrich_knightsbridge.py",
 

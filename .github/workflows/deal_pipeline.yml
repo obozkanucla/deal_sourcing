@@ -10,6 +10,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
+    env:
+      PLAYWRIGHT_HEADLESS: "1"
+
+      # Brokers
+      BB_USERNAME: ${{ secrets.BB_USERNAME }}
+      BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
+
+      # Slack
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+
+      # Google APIs
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -35,44 +51,72 @@ jobs:
           restore-keys: |
             deals-sqlite-
 
-      - name: Run BusinessBuyers enrichment
-        env:
-          BB_USERNAME: ${{ secrets.BB_USERNAME }}
-          BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-        run: |
-          python -m src.scripts.enrich_businessbuyers
+ # --------------------------------------------------
+      # Phase 0 — Legacy imports
+      # --------------------------------------------------
+      - name: Import legacy deals
+        run: python -m src.scripts.import_legacy_deals
 
-      - name: Run BusinessesForSale enrichment
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-          SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-        run: |
-          python src/scripts/enrich_businesses4sale.py
+      - name: Import Dmitry deals
+        run: python -m src.scripts.import_dmitry_deals
 
-      - name: Run sector inference + Drive moves
-        env:
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-        run: |
-          python src/scripts/infer_sectors.py
+      # --------------------------------------------------
+      # Phase 1 — Broker imports
+      # --------------------------------------------------
+      - name: Import Axis Partnership
+        run: python -m src.scripts.import_axispartnership
 
+      - name: Import BusinessBuyers
+        run: python -m src.scripts.import_businessbuyers
+
+      - name: Import BusinessesForSale
+        run: python -m src.scripts.import_businesses4sale
+
+      - name: Import DealOpportunities
+        run: python -m src.scripts.import_dealopportunities
+
+      - name: Import Knightsbridge
+        run: python -m src.scripts.import_knightsbridge
+
+      # --------------------------------------------------
+      # Phase 2 — Enrichment
+      # --------------------------------------------------
+      - name: Enrich Axis Partnership
+        run: python -m src.scripts.enrich_axispartnership
+
+      - name: Enrich BusinessBuyers
+        run: python -m src.scripts.enrich_businessbuyers
+
+      - name: Enrich BusinessesForSale
+        run: python -m src.scripts.enrich_businesses4sale
+
+      - name: Enrich DealOpportunities
+        run: python -m src.scripts.enrich_dealopportunities
+
+      - name: Enrich Knightsbridge
+        run: python -m src.scripts.enrich_knightsbridge
+
+      # --------------------------------------------------
+      # Phase 3 — Intelligence
+      # --------------------------------------------------
+      - name: Infer sectors + move Drive folders
+        run: python -m src.scripts.infer_sectors
+
+      - name: Enrich financials from descriptions
+        run: python -m src.scripts.enrich_financials_from_description
+
+      - name: Recalculate financial metrics
+        run: python -m src.scripts.recalculate_financial_metrics
+
+      # --------------------------------------------------
+      # Phase 4 — Sync outputs
+      # --------------------------------------------------
       - name: Sync SQLite → Google Sheets
-        env:
-          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-        run: |
-          python src/scripts/sheets_sync.py
+        run: python -m src.scripts.sync_to_sheets
 
+      # --------------------------------------------------
+      # Persist DB artifact
+      # --------------------------------------------------
       - name: Upload SQLite artifact
         uses: actions/upload-artifact@v4
         with:
