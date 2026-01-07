@@ -141,16 +141,19 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
             sheet_val = row[idx] if idx < len(row) else ""
 
             if sheet_val == "":
-                if col.allow_blank_pull:
-                    if db_deal.get(col.name) is not None:
-                        updates[col.name] = None
+                if col.allow_blank_pull and db_deal.get(col.name) is not None:
+                    updates[col.name] = None
                 continue
 
             if sheet_val != db_deal.get(col.name):
                 updates[col.name] = sheet_val
 
         if updates:
-            repo.update_deal_fields(db_deal["id"], updates)
+            repo.update_deal_fields(
+                source=source,
+                source_listing_id=source_listing_id,
+                updates=updates,
+            )
             updated += 1
         else:
             skipped += 1

@@ -43,14 +43,14 @@ def main():
         columns=DEAL_COLUMNS
     )
 
-    # 2️⃣ Ensure headers (safe, non-destructive)
+    # 2️⃣ Clean sheet
+    reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
+
+    # 3️⃣ Ensure headers (safe, non-destructive)
     ensure_sheet_headers(ws, DEAL_COLUMNS)
 
-    # 3️⃣ Push new deals only
+    # 4️⃣ Push new deals only
     push_sqlite_to_sheets(repo, ws)
-
-    # 4️⃣ NOW safe to reset visual state
-    reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
 
     apply_sheet_formatting(ws)
     apply_base_sheet_formatting(ws)
