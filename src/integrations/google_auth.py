@@ -37,3 +37,29 @@ def get_google_credentials():
             pickle.dump(creds, token)
 
     return creds
+
+def get_google_refresh_token():
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    # Resolve project root (…/deal_sourcing)
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+    token_path = PROJECT_ROOT / "config/google/token.pickle"
+    creds_path = PROJECT_ROOT / "config/google/credentials.json"
+
+    SCOPES = [
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/spreadsheets",
+    ]
+
+    flow = InstalledAppFlow.from_client_secrets_file(
+        creds_path,
+        scopes=SCOPES,
+    )
+
+    creds = flow.run_local_server(port=0)
+
+    print("REFRESH TOKEN:")
+    print(creds.refresh_token)
+
+if __name__ == "__main__":
+    get_google_refresh_token()
