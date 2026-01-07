@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Playwright
+.playwright/
+ms-playwright/
+
+# SQLite backups (local only)
+db/deals_pre_reset_*.sqlite

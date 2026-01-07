@@ -82,7 +82,7 @@ class KnightsbridgeClient:
     def start(self):
         print("🚀 Starting Knightsbridge client")
         self.playwright = sync_playwright().start()
-        self.browser = self.playwright.chromium.launch(headless=False)
+        self.browser = self.playwright.chromium.launch(headless=os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1")
         self.page = self.browser.new_page()
 
     def stop(self):
