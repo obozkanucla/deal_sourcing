@@ -71,6 +71,10 @@ else:
 DB_PATH = Path("db/deals.sqlite")
 
 def main():
+    print("📄 Google Sheet:")
+    print(f"   Spreadsheet ID: {SPREADSHEET_ID}")
+    print(f"   Worksheet: {WORKSHEET_NAME}")
+    print(f"   URL: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}")
     repo = SQLiteRepository(DB_PATH)
     print("USING DB:", repo.db_path.resolve())
 
