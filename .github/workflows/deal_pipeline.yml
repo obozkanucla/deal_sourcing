@@ -44,7 +44,7 @@ jobs:
         run: python -m playwright install chromium --with-deps
 
       - name: Download latest SQLite DB (if exists)
-        uses: dawidd6/action-download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           workflow: deal_pipeline.yml
           name: deals-sqlite
