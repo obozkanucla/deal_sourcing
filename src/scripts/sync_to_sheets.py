@@ -20,13 +20,43 @@ from src.integrations.sheets_sync import (
     apply_sheet_formatting,
     apply_base_sheet_formatting,
     reset_sheet_state,
-    highlight_analyst_editable_columns
+    highlight_analyst_editable_columns,
+    protect_system_columns,
+    clear_all_protections
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
 SPREADSHEET_ID_Production = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
 WORKSHEET_NAME = "Deals"
 SPREADSHEET_ID_Staging = "1Iioxt688xxw9fVbiixAMGrycwl22GqSh91p4EYsEAH0"
+DROPDOWNS = {
+    "status": [
+        "Pass",
+        "Initial Contact",
+        "CIM",
+        "CIM DD",
+        "1st Meeting (online)",
+        "2nd Meeting (in person)",
+         "Pre-LOI DD",
+        "LOI",
+        "On-Hold (UOffer)",
+        "Lost"],
+    "priority": [
+        "High",
+        "Medium",
+        "Low",
+    ],
+    "decision": [
+        "Pass",
+        "Advance",
+        "Hold",
+    ],
+    "owner": [
+        "Burak",
+        "Muge",
+        "Unassigned",
+    ],
+}
 
 import os
 
@@ -58,6 +88,9 @@ def main():
     # 2️⃣ Clean sheet
     reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
 
+    # Clear all protections
+    clear_all_protections(ws)
+
     # 3️⃣ Ensure headers (safe, non-destructive)
     ensure_sheet_headers(ws, DEAL_COLUMNS)
 
@@ -85,7 +118,9 @@ def main():
     )
 
     highlight_analyst_editable_columns(ws)
-
+    protect_system_columns(ws,["burak@sab.partners",
+                               "serdar@sab.partners",
+                               "adrien@sab.partners"])
 
 if __name__ == "__main__":
     main()

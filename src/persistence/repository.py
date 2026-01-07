@@ -264,7 +264,8 @@ class SQLiteRepository:
                 -- derived financials
                 ebitda_margin,
                 revenue_multiple,
-                ebitda_multiple
+                ebitda_multiple,
+                last_updated_source
             FROM deals
             ORDER BY first_seen ASC
             """
@@ -461,65 +462,67 @@ class SQLiteRepository:
         with self.get_conn() as conn:
             conn.execute(
                 """
-                INSERT INTO deals (deal_id,
-                                   source,
-                                   source_url,
+                INSERT INTO deals (source,
                                    source_listing_id,
+                                   source_url,
                                    title,
                                    industry,
                                    sector,
-                                   sector_source,
                                    location,
                                    incorporation_year,
                                    first_seen,
                                    last_updated,
-                                   status, -- ✅ Legacy outcome lives here
-                                   decision_reason, -- ✅ Legacy reason
+                                   last_updated_source,
+                                   status,
+                                   decision,
+                                   decision_reason,
                                    notes,
                                    revenue_k,
                                    ebitda_k,
                                    asking_price_k,
                                    drive_folder_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(deal_id) DO
+                VALUES (:source,
+                        :source_listing_id,
+                        :source_url,
+                        :title,
+                        :industry,
+                        :sector,
+                        :location,
+                        :incorporation_year,
+                        :first_seen,
+                        :last_updated,
+                        'MANUAL',
+                        :status,
+                        :decision,
+                        :decision_reason,
+                        :notes,
+                        :revenue_k,
+                        :ebitda_k,
+                        :asking_price_k,
+                        :drive_folder_url) ON CONFLICT (source, source_listing_id) DO
                 UPDATE SET
                     title = excluded.title,
                     industry = excluded.industry,
                     sector = excluded.sector,
-                    sector_source = excluded.sector_source,
                     location = excluded.location,
                     incorporation_year = excluded.incorporation_year,
+
                     last_updated = excluded.last_updated,
-                    status = excluded.status, -- ✅
+                    last_updated_source = 'MANUAL',
+
+                    status = excluded.status,
+                    decision = excluded.decision,
                     decision_reason = excluded.decision_reason,
                     notes = excluded.notes,
+
                     revenue_k = excluded.revenue_k,
                     ebitda_k = excluded.ebitda_k,
                     asking_price_k = excluded.asking_price_k,
-                    drive_folder_url = excluded.drive_folder_url;
+                    drive_folder_url = excluded.drive_folder_url
+                ;
                 """,
-                (
-                    deal["deal_id"],  # deal_id
-                    deal["source"],  # "LegacySheet"
-                    f"legacy://{deal['deal_id']}",  # source_url
-                    deal["deal_id"],  # source_listing_id
-                    deal["title"],
-                    deal["industry"],
-                    deal["sector"],
-                    deal["sector_source"],  # "manual"
-                    deal["location"],
-                    deal["incorporation_year"],
-                    deal["first_seen"],
-                    deal["last_updated"],
-                    deal["outcome"],  # ✅ → status
-                    deal["outcome_reason"],  # ✅
-                    deal["notes"],  # Legacy "Update"
-                    deal["revenue_k"],
-                    deal["ebitda_k"],
-                    deal["asking_price_k"],
-                    deal["drive_folder_url"],
-                ),
+                deal,
             )
-
     def upsert_intermediary(self, rec: dict):
         with self.get_conn() as conn:
             conn.execute(

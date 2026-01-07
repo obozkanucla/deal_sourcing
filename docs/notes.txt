@@ -1,0 +1,68 @@
+-- sanity check first
+SELECT id, source_listing_id
+FROM deals
+WHERE source = 'BusinessBuyers'
+  AND source_listing_id GLOB '*[^0-9]*';
+
+-- then delete
+DELETE FROM deals
+WHERE source = 'BusinessBuyers'
+  AND source_listing_id GLOB '*[^0-9]*';
+
+-- verify
+SELECT id, source_listing_id
+FROM deals
+WHERE source = 'BusinessBuyers';
+
+
+
+
+CREATE TABLE deals_v2 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    -- Identity
+    source TEXT NOT NULL,
+    source_listing_id TEXT NOT NULL,
+    source_url TEXT,
+
+    -- Core descriptors
+    title TEXT,
+    industry TEXT,
+    sector TEXT,
+    location TEXT,
+    incorporation_year INTEGER,
+
+    -- Financials
+    revenue_k REAL,
+    ebitda_k REAL,
+    asking_price_k REAL,
+    profit_margin_pct REAL,
+    revenue_growth_pct REAL,
+    leverage_pct REAL,
+
+    -- Calculated metrics
+    ebitda_margin REAL,
+    revenue_multiple REAL,
+    ebitda_multiple REAL,
+
+    -- Analyst workflow
+    status TEXT,
+    owner TEXT,
+    priority TEXT,
+    notes TEXT,
+
+    -- Decisioning
+    decision TEXT,
+    decision_reason TEXT,
+
+    -- Lifecycle
+    first_seen DATETIME,
+    last_seen DATETIME,
+    last_updated DATETIME,
+    last_updated_source TEXT,   -- 'AUTO' | 'MANUAL'
+
+    -- Assets
+    drive_folder_url TEXT,
+
+    UNIQUE (source, source_listing_id)
+);

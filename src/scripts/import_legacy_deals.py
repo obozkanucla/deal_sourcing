@@ -120,7 +120,8 @@ def main():
         if not company:
             continue
 
-        deal_id = f"Legacy:{slugify(intermediary)}:{slugify(company)}"
+        source = "LegacySheet"
+        source_listing_id = slugify(company)
         industry = val("Industry")
 
         sector = (
@@ -142,17 +143,18 @@ def main():
             notes_parts.append(legacy_notes)
 
         deal = {
-            "deal_id": deal_id,
-            "source": "LegacySheet",
+            "source": source,
+            "source_listing_id": source_listing_id,
+            "source_url": f"legacy://{slugify(company)}",
             # ✅ canonical title
             "title": company,
             "industry": industry,
             "sector": sector,
-            "sector_source": "manual",
             "location": val("Location"),
             "incorporation_year": parse_int(val("Inc")),
             "first_seen": parse_date(val("Date Received")),
             "last_updated": parse_date(val("Last update")),
+            "last_updated_source": "MANUAL",
             "outcome": outcome,  # → status
             "outcome_reason": outcome_reason,
             "status": val("Outcome"),
@@ -166,7 +168,7 @@ def main():
         }
 
         if DRY_RUN:
-            print(f"🧪 DRY RUN: {deal_id}")
+            print(f"🧪 DRY RUN: {source_listing_id}")
             print(json.dumps(deal, indent=2))
             continue
 

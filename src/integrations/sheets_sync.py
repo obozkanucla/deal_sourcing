@@ -7,6 +7,31 @@ import string
 SHEET_COLUMNS = [c.name for c in DEAL_COLUMNS]
 ALLOWED_COLUMNS = {c.name for c in DEAL_COLUMNS if c.push or c.pull}
 SYSTEM_FIELDS = {c.name for c in DEAL_COLUMNS if c.system}
+DROPDOWNS = {
+    "status": [
+        "New",
+        "Reviewing",
+        "CIM",
+        "Parked",
+        "Passed",
+        "Lost",
+    ],
+    "priority": [
+        "High",
+        "Medium",
+        "Low",
+    ],
+    "decision": [
+        "Pass",
+        "Advance",
+        "Hold",
+    ],
+    "owner": [
+        "Burak",
+        "Muge",
+        "Unassigned",
+    ],
+}
 
 # -----------------------------
 # Helpers
@@ -573,6 +598,18 @@ def apply_sheet_formatting(ws):
         if name in col:
             apply_status_rules(ws, col[name])
 
+    # Status column
+    if "status" in col:
+        apply_status_dropdown(ws, col["status"])
+
+    # Decision column
+    if "decision" in col:
+        apply_decision_dropdown(ws, col["decision"])
+
+    # Owner column
+    if "owner" in col:
+        apply_owner_dropdown(ws, col["owner"])
+
     print("🎨 Sheet formatting applied")
 
 def apply_base_sheet_formatting(ws):
@@ -617,3 +654,198 @@ def highlight_analyst_editable_columns(ws, columns=DEAL_COLUMNS):
         ws.spreadsheet.batch_update({"requests": requests})
 
     print(f"🖍️ Highlighted {len(analyst_cols)} analyst-editable columns")
+
+def get_protected_columns():
+    return [
+        c.name for c in DEAL_COLUMNS
+        if not c.pull or c.system
+    ]
+
+def protect_system_columns(ws, allowed_editors=None):
+    """
+    Protect non-analyst columns so only editors (or nobody) can change them.
+    """
+    if allowed_editors is None:
+        allowed_editors = []  # empty = only owner
+
+    header_idx = header_to_col_idx(ws)
+    protected_cols = get_protected_columns()
+
+    requests = []
+
+    for col_name in protected_cols:
+        if col_name not in header_idx:
+            continue
+
+        col = header_idx[col_name] - 1  # 0-based
+
+        requests.append({
+            "addProtectedRange": {
+                "protectedRange": {
+                    "range": {
+                        "sheetId": ws.id,
+                        "startRowIndex": 1,     # skip header
+                        "startColumnIndex": col,
+                        "endColumnIndex": col + 1,
+                    },
+                    "description": f"System-managed column: {col_name}",
+                    "warningOnly": False,
+                    "editors": {
+                        "users": allowed_editors
+                    }
+                }
+            }
+        })
+
+    if requests:
+        ws.spreadsheet.batch_update({"requests": requests})
+
+    print(f"🔒 Protected {len(requests)} system columns")
+
+def apply_status_dropdown(ws, col_idx: int):
+    """
+    Apply a strict dropdown to the Status column.
+    col_idx is 1-based.
+    """
+    STATUS_DROPDOWN = [
+        "Initial Contact",
+        "CIM",
+        "1st Meeting",
+        "2nd Meeting",
+        "Pre-LOI DD",
+        "LOI",
+        "On Hold",
+        "Pass",
+        "Lost",
+    ]
+    requests = [
+        {
+            "setDataValidation": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": 1,              # skip header
+                    "startColumnIndex": col_idx - 1,
+                    "endColumnIndex": col_idx,
+                },
+                "rule": {
+                    "condition": {
+                        "type": "ONE_OF_LIST",
+                        "values": [
+                            {"userEnteredValue": v}
+                            for v in STATUS_DROPDOWN
+                        ],
+                    },
+                    "strict": True,
+                    "showCustomUi": True,
+                },
+            }
+        }
+    ]
+
+    ws.spreadsheet.batch_update({"requests": requests})
+    print("🔽 Status dropdown applied")
+
+def apply_decision_dropdown(ws, col_idx: int):
+    """
+    Apply a strict dropdown to the Status column.
+    col_idx is 1-based.
+    """
+    DECISION_DROPDOWN = [
+        "Pass",
+        "Hold",
+        "Progress",
+    ]
+    requests = [
+        {
+            "setDataValidation": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": 1,              # skip header
+                    "startColumnIndex": col_idx - 1,
+                    "endColumnIndex": col_idx,
+                },
+                "rule": {
+                    "condition": {
+                        "type": "ONE_OF_LIST",
+                        "values": [
+                            {"userEnteredValue": v}
+                            for v in DECISION_DROPDOWN
+                        ],
+                    },
+                    "strict": True,
+                    "showCustomUi": True,
+                },
+            }
+        }
+    ]
+
+    ws.spreadsheet.batch_update({"requests": requests})
+    print("🔽 Decision dropdown applied")
+
+def apply_owner_dropdown(ws, col_idx: int):
+    """
+    Apply a strict dropdown to the Status column.
+    col_idx is 1-based.
+    """
+    OWNER_DROPDOWN = [
+        "AMO",
+        "MSE",
+        "OBO",
+    ]
+    requests = [
+        {
+            "setDataValidation": {
+                "range": {
+                    "sheetId": ws.id,
+                    "startRowIndex": 1,              # skip header
+                    "startColumnIndex": col_idx - 1,
+                    "endColumnIndex": col_idx,
+                },
+                "rule": {
+                    "condition": {
+                        "type": "ONE_OF_LIST",
+                        "values": [
+                            {"userEnteredValue": v}
+                            for v in OWNER_DROPDOWN
+                        ],
+                    },
+                    "strict": True,
+                    "showCustomUi": True,
+                },
+            }
+        }
+    ]
+
+    ws.spreadsheet.batch_update({"requests": requests})
+    print("🔽 Owner dropdown applied")
+
+def clear_all_protections(ws):
+    """
+    Remove all sheet-level and range-level protections.
+    Safe to run repeatedly.
+    """
+    spreadsheet = ws.spreadsheet
+    sheet_id = ws.id
+
+    meta = spreadsheet.fetch_sheet_metadata()
+
+    requests = []
+
+    for sheet in meta["sheets"]:
+        if sheet["properties"]["sheetId"] != sheet_id:
+            continue
+
+        protections = sheet.get("protectedRanges", [])
+
+        for p in protections:
+            requests.append({
+                "deleteProtectedRange": {
+                    "protectedRangeId": p["protectedRangeId"]
+                }
+            })
+
+    if requests:
+        spreadsheet.batch_update({"requests": requests})
+        print(f"🧹 Cleared {len(requests)} existing protections")
+    else:
+        print("🧹 No existing protections found")
