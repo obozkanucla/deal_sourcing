@@ -1,39 +1,56 @@
-name: Deal Sheet Refresh
+name: Deal Sheet Refresh Pipeline
 
 on:
   schedule:
-    - cron: "0 5 * * *"   # daily at 05:00 UTC
+    - cron: "* * * * *"   # daily at 05:00 UTC
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: write   # required for GitHub Releases
   actions: read
 
 jobs:
   pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     env:
       PLAYWRIGHT_HEADLESS: "1"
 
-      # Brokers
+      # -----------------------------
+      # Broker credentials
+      # -----------------------------
       BB_USERNAME: ${{ secrets.BB_USERNAME }}
       BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
 
+      # -----------------------------
       # Slack
+      # -----------------------------
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
 
-      # Google APIs
+      # -----------------------------
+      # Google APIs (OAuth user)
+      # -----------------------------
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
 
+      # -----------------------------
+      # Pipeline safety
+      # -----------------------------
+      PIPELINE_ENV: prod
+
     steps:
+      # --------------------------------------------------
+      # Checkout code
+      # --------------------------------------------------
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      # --------------------------------------------------
+      # Python
+      # --------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -44,24 +61,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Install Playwright browsers
-        run: python -m playwright install chromium --with-deps
+#      # --------------------------------------------------
+#      # Playwright
+#      # --------------------------------------------------
+#      - name: Install Playwright browsers
+#        run: |
+#          python -m playwright install chromium --with-deps
 
-      - name: Download latest SQLite DB (if exists)
-        uses: actions/download-artifact@v4
-        with:
-          workflow: deal_pipeline.yml
-          name: deals-sqlite
-          path: db
-        continue-on-error: true
-
-#      - name: Restore SQLite DB cache
-#        uses: actions/cache@v4
-#        with:
-#          path: db/deals.sqlite
-#          key: deals-sqlite-${{ github.run_id }}
-#          restore-keys: |
-#            deals-sqlite-
+      # --------------------------------------------------
+      # Restore canonical SQLite DB from GitHub Release
+      # --------------------------------------------------
+      - name: Download latest SQLite DB from release (if exists)
+        run: |
+          mkdir -p db
+          gh release download db-latest \
+            --pattern deals.sqlite \
+            --output db/deals.sqlite || echo "No existing DB found — starting fresh"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 #      # --------------------------------------------------
 #      # Phase 0 — Legacy imports
@@ -77,7 +94,7 @@ jobs:
 #      # --------------------------------------------------
 #      - name: Import Axis Partnership
 #        run: python -m src.scripts.import_axispartnership
-
+#
 #      - name: Import BusinessBuyers
 #        run: python -m src.scripts.import_businessbuyers
 #
@@ -89,13 +106,13 @@ jobs:
 #
 #      - name: Import Knightsbridge
 #        run: python -m src.scripts.import_knightsbridge
-
+#
 #      # --------------------------------------------------
 #      # Phase 2 — Enrichment
 #      # --------------------------------------------------
 #      - name: Enrich Axis Partnership
 #        run: python -m src.scripts.enrich_axispartnership
-
+#
 #      - name: Enrich BusinessBuyers
 #        run: python -m src.scripts.enrich_businessbuyers
 #
@@ -127,18 +144,9 @@ jobs:
         run: python -m src.scripts.sync_to_sheets
 
       # --------------------------------------------------
-      # Persist DB artifact
+      # Persist canonical SQLite snapshot
       # --------------------------------------------------
-      - name: Upload SQLite artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deals-sqlite
-          path: db/deals.sqlite
-
-      # --------------------------------------------------
-      # Publish Release snapshot
-      # --------------------------------------------------
-      - name: Create or update DB snapshot release
+      - name: Publish SQLite snapshot to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: db-latest
