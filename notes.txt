@@ -1,0 +1,15 @@
+-- sanity check first
+SELECT id, source_listing_id
+FROM deals
+WHERE source = 'BusinessBuyers'
+  AND source_listing_id GLOB '*[^0-9]*';
+
+-- then delete
+DELETE FROM deals
+WHERE source = 'BusinessBuyers'
+  AND source_listing_id GLOB '*[^0-9]*';
+
+-- verify
+SELECT id, source_listing_id
+FROM deals
+WHERE source = 'BusinessBuyers';

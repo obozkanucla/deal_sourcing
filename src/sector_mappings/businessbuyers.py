@@ -148,6 +148,7 @@ def map_businessbuyers_sector(*, raw_sector: str | None):
             "sector": "Miscellaneous",
             "confidence": 0.2,
             "reason": "Missing BusinessBuyers sector",
+            "sector_source": "unclassified",
         }
 
     mapping = BUSINESSBUYERS_SECTOR_MAP.get(raw_sector)
@@ -159,4 +160,5 @@ def map_businessbuyers_sector(*, raw_sector: str | None):
         "sector": "Miscellaneous",
         "confidence": 0.3,
         "reason": f"Unknown BusinessBuyers sector '{raw_sector}'",
+        "sector_source": "unclassified",
     }

@@ -6,6 +6,7 @@ openai>=1.0
 python-dotenv>=1.0
 PyYAML>=6.0
 gspread>=6.2.1
+slack-sdk>=3.12,<4
 # -----------------------
 # Google APIs (Sheets / Drive)
 # -----------------------

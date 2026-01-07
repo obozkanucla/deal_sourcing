@@ -2,6 +2,7 @@ import time
 from typing import Iterable, Set, Tuple
 from src.domain.deal_columns import DEAL_COLUMNS
 from gspread.utils import rowcol_to_a1
+import string
 
 SHEET_COLUMNS = [c.name for c in DEAL_COLUMNS]
 ALLOWED_COLUMNS = {c.name for c in DEAL_COLUMNS if c.push or c.pull}
@@ -160,8 +161,6 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
 # PATCH: Folder links only
 # -----------------------------
 
-import time
-
 def update_folder_links(repo, ws):
     """
     Backfill Drive Folder links in Google Sheets
@@ -292,11 +291,6 @@ def backfill_system_columns(repo, ws, columns, batch_size=100):
 
     print("✅ System column backfill complete")
 
-
-
-from gspread.utils import rowcol_to_a1
-import string
-
 def col_letter(idx: int) -> str:
     """1-based index → column letter"""
     result = ""
@@ -304,7 +298,6 @@ def col_letter(idx: int) -> str:
         idx, rem = divmod(idx - 1, 26)
         result = chr(65 + rem) + result
     return result
-
 
 def format_currency_column(ws, col_idx):
     col = col_letter(col_idx)
@@ -546,6 +539,10 @@ def apply_sheet_formatting(ws):
     for name in ("revenue_k", "ebitda_k", "asking_price_k"):
         if name in col:
             format_currency_column(ws, col[name])
+
+    for name in ("profit_margin_pct", "revenue_growth_pct", "leverage_pct"):
+        if name in col:
+            format_percentage_column(ws, col[name])
 
     if "ebitda_margin" in col:
         # format_percentage_column(ws, col["ebitda_margin"])

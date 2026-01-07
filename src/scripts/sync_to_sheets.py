@@ -61,7 +61,9 @@ def main():
     backfill_system_columns(
         repo,
         ws,
-        columns=["title", "industry", "sector", "location"]
+        columns=["title", "industry", "sector", "location", "profit_margin_pct",
+            "revenue_growth_pct",
+            "leverage_pct",]
     )
 
 

@@ -26,6 +26,9 @@ DEAL_COLUMNS = [
     ColumnSpec("revenue_k", push=True, pull=True),
     ColumnSpec("ebitda_k", push=True, pull=True),
     ColumnSpec("asking_price_k", push=True, pull=True),
+    ColumnSpec("profit_margin_pct", push=True, pull=True),
+    ColumnSpec("revenue_growth_pct", push=True, pull=True),
+    ColumnSpec("leverage_pct", push=True, pull=True),
 
     # --- Calculated financial metrics (DB truth only) ---
     ColumnSpec("ebitda_margin", push=True, pull=False, system=True),

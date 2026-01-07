@@ -3,7 +3,6 @@ from pathlib import Path
 
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-
 from src.integrations.google_auth import get_google_credentials
 
 
@@ -88,8 +87,35 @@ def find_or_create_deal_folder(
     return folder["id"]
 
 # -------------------------------------------------
+# Folder move
+# -------------------------------------------------
+
+def move_folder_to_parent(folder_id: str, new_parent_id: str):
+    """
+    Move an existing Drive folder to a new parent folder.
+    Keeps the same Drive ID and URL.
+    """
+    service = get_drive_service()
+
+    file = service.files().get(
+        fileId=folder_id,
+        fields="parents",
+        supportsAllDrives=True,
+    ).execute()
+
+    previous_parents = ",".join(file.get("parents", []))
+
+    service.files().update(
+        fileId=folder_id,
+        addParents=new_parent_id,
+        removeParents=previous_parents,
+        supportsAllDrives=True,
+    ).execute()
+
+# -------------------------------------------------
 # PDF upload
 # -------------------------------------------------
+
 
 def find_existing_pdf(*, folder_id: str, filename: str) -> str | None:
     service = get_drive_service()

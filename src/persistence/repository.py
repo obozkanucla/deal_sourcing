@@ -342,19 +342,25 @@ class SQLiteRepository:
             confidence,
     ):
         with self.get_conn() as conn:
-            conn.execute(
+            cur = conn.execute(
                 """
                 UPDATE deals
                 SET industry                    = ?,
                     sector                      = ?,
                     sector_source               = ?,
                     sector_inference_reason     = ?,
-                    sector_inference_confidence = ?
-                WHERE deal_id = ?
+                    sector_inference_confidence = ?,
+                    last_updated                = CURRENT_TIMESTAMP
+                WHERE id = ?
                 """,
                 (industry, sector, source, reason, confidence, deal_id),
             )
 
+            if cur.rowcount != 1:
+                raise RuntimeError(
+                    f"update_sector_inference affected {cur.rowcount} rows "
+                    f"(expected 1, id={deal_id})"
+                )
     def fetch_by_deal_id(self, deal_id: str):
         with self.get_conn() as conn:
             cur = conn.execute(

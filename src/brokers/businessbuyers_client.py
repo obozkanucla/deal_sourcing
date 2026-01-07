@@ -1,5 +1,6 @@
 from pathlib import Path
 from datetime import datetime
+import os
 
 from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -16,7 +17,7 @@ class BusinessBuyersClient(BrokerClient):
         self.username = username
         self.password = password
         self.click_budget = click_budget
-
+        self.headless = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
         self.browser = None
         self.page = None
         self.auth_context = None
@@ -32,7 +33,7 @@ class BusinessBuyersClient(BrokerClient):
         p = sync_playwright().start()
 
         self.browser = p.chromium.launch(
-            headless=False,
+            headless=self.headless, #False,
             slow_mo=400,
         )
 
@@ -204,7 +205,7 @@ class BusinessBuyersClient(BrokerClient):
 
     def fetch_detail_anon(self, url: str) -> str:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(headless=self.headless) #True)
             page = browser.new_page()
             page.goto(url, timeout=30000)
             page.wait_for_load_state("domcontentloaded")
@@ -228,7 +229,7 @@ class BusinessBuyersClient(BrokerClient):
         if self.anon_context is None:
             if self.browser is None:
                 self._playwright = sync_playwright().start()
-                self.browser = self._playwright.chromium.launch(headless=True)
+                self.browser = self._playwright.chromium.launch(headless=self.headless) #True)
 
             self.anon_context = self.browser.new_context()
 

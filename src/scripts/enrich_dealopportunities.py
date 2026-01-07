@@ -5,8 +5,11 @@ import hashlib
 import json
 import os
 from typing import Optional
+from googleapiclient.errors import HttpError
+import time
 
 from bs4 import BeautifulSoup
+from playwright._impl._errors import Error as PlaywrightError
 
 from src.brokers.dealopportunities_client import DealOpportunitiesClient
 from src.persistence.deal_artifacts import record_deal_artifact
@@ -156,6 +159,11 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
             url = r["source_url"]
             completed = idx + 1
             pct = completed * 100 // total
+            # 🔁 HARD browser recycle every 25 deals
+            if completed % 25 == 0:
+                print("🔄 Restarting DealOpportunities browser")
+                client.stop()
+                client.start()
 
             print(
                 f"\n📊 Progress: {completed}/{total} ({pct}%)"
@@ -180,10 +188,24 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
             # -------------------------------------------------
             # FETCH + PDF
             # -------------------------------------------------
-            html = client.fetch_listing_detail_and_pdf(
-                url=url,
-                pdf_path=pdf_path,
-            )
+            try:
+                html = client.fetch_listing_detail_and_pdf(
+                    url=url,
+                    pdf_path=pdf_path,
+                )
+            except PlaywrightError as e:
+                conn.execute(
+                    """
+                    UPDATE deals
+                    SET needs_detail_refresh = 1,
+                        detail_fetch_reason  = ?
+                    WHERE id = ?
+                    """,
+                    (str(e)[:500], row_id),
+                )
+                conn.commit()
+                print(f"❌ Network error, skipped: {e}")
+                continue
             client._cooldown()
             title = extract_do_title(html) or r["title"]
             parsed = parse_do_detail(html)
@@ -218,13 +240,37 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
                 f"https://drive.google.com/drive/folders/{deal_folder_id}"
             )
 
-            pdf_drive_url = upload_pdf_to_drive(
-                local_path=pdf_path,
-                filename=f"{deal_key}.pdf",
-                folder_id=deal_folder_id,
-            )
+            pdf_drive_url = None
+            drive_file_id = None
 
-            drive_file_id = pdf_drive_url.split("/d/")[1].split("/")[0]
+            for attempt in range(3):
+                try:
+                    pdf_drive_url = upload_pdf_to_drive(
+                        local_path=pdf_path,
+                        filename=f"{deal_key}.pdf",
+                        folder_id=deal_folder_id,
+                    )
+                    drive_file_id = pdf_drive_url.split("/d/")[1].split("/")[0]
+                    break
+
+                except HttpError as e:
+                    print(f"⚠️ Drive error (attempt {attempt + 1}/3): {e}")
+                    time.sleep(5 * (attempt + 1))
+
+            if not pdf_drive_url:
+                conn.execute(
+                    """
+                    UPDATE deals
+                    SET needs_detail_refresh = 1,
+                        detail_fetch_reason  = 'drive_upload_failed'
+                    WHERE id = ?
+                    """,
+                    (row_id,),
+                )
+                conn.commit()
+                print("⏭️ Skipping Drive for this deal, continuing")
+                continue
+
 
             # -------------------------------------------------
             # ARTIFACT RECORD (STANDARD)

@@ -1,8 +1,12 @@
 from pathlib import Path
 from src.persistence.repository import SQLiteRepository
+from src.integrations.drive_folders import get_drive_parent_folder_id
+from src.integrations.google_drive import move_folder_to_parent
+
+DRY_RUN = False  # flip to False when confident
 
 # ============================================================
-# CANONICAL INDUSTRY → SECTOR TAXONOMY (SOURCE OF TRUTH)
+# TAXONOMY
 # ============================================================
 
 CANONICAL_TAXONOMY = {
@@ -41,7 +45,7 @@ CANONICAL_TAXONOMY = {
         "Insurance",
     ],
     "Food_Beverage": [
-        "Beverage Production (including Beer Distribution)",
+        "Beverage Production",
         "Catering / Hospitality",
         "Food Production / Processing",
         "Food Retail",
@@ -82,58 +86,15 @@ CANONICAL_TAXONOMY = {
     ],
 }
 
-# ============================================================
-# KEYWORD → CANONICAL SECTOR RULES
-# ============================================================
-
 SECTOR_KEYWORDS = [
-    # Healthcare
     ("Healthcare", "Domiciliary Care / Home Healthcare",
-     ["home care", "domiciliary", "care agency", "care business"]),
-    ("Healthcare", "Social Care",
-     ["supported living", "learning disabilities", "autism"]),
-    ("Healthcare", "Hospitals / Clinics",
-     ["clinic", "hospital", "medical centre"]),
-    ("Healthcare", "Medical Devices / Equipment",
-     ["medical device", "diagnostic equipment"]),
-    ("Healthcare", "Pharmaceuticals",
-     ["pharma", "pharmaceutical", "drug manufacturing"]),
-
-    # Technology
+     ["home care", "domiciliary", "care agency"]),
     ("Technology", "Software / SaaS",
-     ["software", "saas", "platform", "subscription", "cloud"]),
-    ("Technology", "IT Consulting",
-     ["it consulting", "technology consulting", "systems integration"]),
-    ("Technology", "Cybersecurity",
-     ["cybersecurity", "security software", "infosec"]),
-    ("Technology", "Telecommunications",
-     ["telecom", "network operator", "broadband"]),
-    ("Technology", "Hardware",
-     ["hardware", "devices", "electronics"]),
-
-    # Business Services
-    ("Business_Services", "Marketing / Advertising",
-     ["marketing", "branding", "advertising", "digital agency"]),
-    ("Business_Services", "Recruitment / HR Services",
-     ["recruitment", "staffing", "headhunting", "hr services"]),
-    ("Business_Services", "Consulting / Professional Services",
-     ["consulting", "advisory", "professional services"]),
-
-    # Industrials
+     ["software", "saas", "platform"]),
     ("Industrials", "Manufacturing",
-     ["manufacturing", "factory", "production facility"]),
-    ("Industrials", "Engineering",
-     ["engineering", "fabrication", "machining"]),
-    ("Industrials", "Energy / Utilities",
-     ["energy", "utilities", "power generation"]),
-
-    # Consumer / Retail
+     ["manufacturing", "factory"]),
     ("Consumer_Retail", "E-commerce",
-     ["e-commerce", "ecommerce", "shopify", "amazon"]),
-    ("Consumer_Retail", "Retail Stores",
-     ["retail store", "high street shop"]),
-    ("Consumer_Retail", "Leisure / Hospitality",
-     ["hospitality", "leisure", "hotel", "restaurant"]),
+     ["e-commerce", "shopify", "amazon"]),
 ]
 
 # ============================================================
@@ -143,26 +104,43 @@ SECTOR_KEYWORDS = [
 def normalize(text: str) -> str:
     return (text or "").lower()
 
-
 def infer_sector(text: str):
-    """
-    Returns canonical (industry, sector, reason, confidence) or None.
-    """
     text_l = normalize(text)
-
     for industry, sector, keywords in SECTOR_KEYWORDS:
         hits = [kw for kw in keywords if kw in text_l]
         if hits:
-            confidence = min(0.9, 0.4 + 0.1 * len(hits))
             return {
                 "industry": industry,
                 "sector": sector,
-                "reason": f"Matched keywords: {', '.join(hits[:3])}",
-                "confidence": confidence,
+                "confidence": min(0.9, 0.4 + 0.1 * len(hits)),
+                "reason": f"Matched keywords: {', '.join(hits)}",
             }
-
     return None
 
+def maybe_move_drive_folder(deal, new_industry):
+    old_industry = deal.get("industry")
+    folder_id = deal.get("drive_folder_id")
+
+    if not folder_id:
+        print("   ⏭️ No Drive folder")
+        return
+
+    if not old_industry or old_industry == new_industry:
+        print("   ⏭️ Industry unchanged")
+        return
+
+    new_parent = get_drive_parent_folder_id(
+        industry=new_industry,
+        broker=deal["source"],
+    )
+
+    print(f"   📁 Drive move {old_industry} → {new_industry}")
+
+    if DRY_RUN:
+        print("   🧪 DRY RUN — not moving folder")
+        return
+
+    move_folder_to_parent(folder_id, new_parent)
 
 # ============================================================
 # MAIN
@@ -171,64 +149,72 @@ def infer_sector(text: str):
 def main():
     repo = SQLiteRepository(Path("db/deals.sqlite"))
 
-    deals = repo.fetch_all(
-        """
-        SELECT deal_id,
-               sector_source,
-               sector_raw,
-               industry_raw,
-               description
-        FROM deals
-        WHERE sector_source IS NULL
-           OR sector_source = 'inferred'
-        """
-    )
+    deals = repo.fetch_all("""
+            SELECT
+                id,
+                deal_id,
+                source,
+                industry,
+                sector,
+                sector_source,
+                sector_raw,
+                industry_raw,
+                description,
+                drive_folder_id
+            FROM deals
+            WHERE sector_source IS NULL
+               OR sector_source = 'unclassified'
+    """)
 
     updated = 0
-    skipped = 0
 
     for d in deals:
-        # 🔒 Never override manual classification
-        if d["sector_source"] == "manual":
-            skipped += 1
-            continue
+        old_industry = d.get("industry")
 
-        text_blob = " ".join(
-            filter(
-                None,
-                [
-                    d.get("sector_raw"),
-                    d.get("industry_raw"),
-                    d.get("description"),
-                ],
-            )
+        text = " ".join(
+            filter(None, [
+                d.get("sector_raw"),
+                d.get("industry_raw"),
+                d.get("description"),
+            ])
         )
 
-        inference = infer_sector(text_blob)
+        inference = infer_sector(text)
         if not inference:
             continue
 
-        # 🔒 Safety threshold
         if inference["confidence"] < 0.5:
             continue
 
-        # 🔒 Final validation against canonical taxonomy
         if inference["sector"] not in CANONICAL_TAXONOMY[inference["industry"]]:
-            continue  # should never happen, but guards future mistakes
+            continue
 
-        repo.update_sector_inference(
-            deal_id=d["deal_id"],
-            industry=inference["industry"],
-            sector=inference["sector"],
-            source="inferred",
-            reason=inference["reason"],
-            confidence=inference["confidence"],
+        print(
+            f"\n➡️ {d['source']}:{d['deal_id']} | "
+            f"{old_industry} → {inference['industry']}"
         )
 
+        if DRY_RUN:
+            print(
+                f"   🧪 DRY RUN — would update "
+                f"{inference['industry']} / {inference['sector']}"
+            )
+        else:
+            print(inference["industry"], inference["sector"], inference["reason"])
+            repo.update_sector_inference(
+                deal_id=d["id"],
+                industry=inference["industry"],
+                sector=inference["sector"],
+                source="inferred",
+                reason=inference["reason"],
+                confidence=inference["confidence"],
+            )
+
+            # Now Drive follows DB
+            maybe_move_drive_folder(d, inference["industry"])
         updated += 1
 
-    print(f"✅ Sector inference complete — updated={updated}, skipped={skipped}")
-
+    print(f"\n✅ Sector inference complete — updated={updated}")
 
 if __name__ == "__main__":
     main()
