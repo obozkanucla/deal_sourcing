@@ -31,39 +31,45 @@ DB_PATH = Path("db/deals.sqlite")
 def main():
     repo = SQLiteRepository(DB_PATH)
     print("USING DB:", repo.db_path.resolve())
+
     gc = get_gspread_client()
     sh = gc.open_by_key(SPREADSHEET_ID)
     ws = sh.worksheet(WORKSHEET_NAME)
 
-    reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
-
-    # Pull analyst edits back
+    # 1️⃣ PULL analyst edits FIRST
     pull_sheets_to_sqlite(
         repo,
         ws,
         columns=DEAL_COLUMNS
     )
 
-    # ✅ SINGLE SOURCE OF TRUTH
+    # 2️⃣ Ensure headers (safe, non-destructive)
     ensure_sheet_headers(ws, DEAL_COLUMNS)
 
-    # Push new deals only
-    push_sqlite_to_sheets(
-        repo,
-        ws
-    )
+    # 3️⃣ Push new deals only
+    push_sqlite_to_sheets(repo, ws)
+
+    # 4️⃣ NOW safe to reset visual state
+    reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
+
     apply_sheet_formatting(ws)
     apply_base_sheet_formatting(ws)
 
-    # Backfill Drive folder links
+    # 5️⃣ Enrichment / backfills
     update_folder_links(repo, ws)
 
     backfill_system_columns(
         repo,
         ws,
-        columns=["title", "industry", "sector", "location", "profit_margin_pct",
+        columns=[
+            "title",
+            "industry",
+            "sector",
+            "location",
+            "profit_margin_pct",
             "revenue_growth_pct",
-            "leverage_pct",]
+            "leverage_pct",
+        ]
     )
 
 
