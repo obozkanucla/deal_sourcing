@@ -43,15 +43,23 @@ jobs:
       - name: Install Playwright browsers
         run: python -m playwright install chromium --with-deps
 
-      - name: Restore SQLite DB cache
-        uses: actions/cache@v4
+      - name: Download latest SQLite DB (if exists)
+        uses: dawidd6/action-download-artifact@v3
         with:
-          path: db/deals.sqlite
-          key: deals-sqlite-${{ github.run_id }}
-          restore-keys: |
-            deals-sqlite-
+          workflow: deal_pipeline.yml
+          name: deals-sqlite
+          path: db
+        continue-on-error: true
 
- # --------------------------------------------------
+#      - name: Restore SQLite DB cache
+#        uses: actions/cache@v4
+#        with:
+#          path: db/deals.sqlite
+#          key: deals-sqlite-${{ github.run_id }}
+#          restore-keys: |
+#            deals-sqlite-
+
+      # --------------------------------------------------
       # Phase 0 — Legacy imports
       # --------------------------------------------------
       - name: Import legacy deals
@@ -66,17 +74,17 @@ jobs:
       - name: Import Axis Partnership
         run: python -m src.scripts.import_axispartnership
 
-      - name: Import BusinessBuyers
-        run: python -m src.scripts.import_businessbuyers
-
-      - name: Import BusinessesForSale
-        run: python -m src.scripts.import_businesses4sale
-
-      - name: Import DealOpportunities
-        run: python -m src.scripts.import_dealopportunities
-
-      - name: Import Knightsbridge
-        run: python -m src.scripts.import_knightsbridge
+#      - name: Import BusinessBuyers
+#        run: python -m src.scripts.import_businessbuyers
+#
+#      - name: Import BusinessesForSale
+#        run: python -m src.scripts.import_businesses4sale
+#
+#      - name: Import DealOpportunities
+#        run: python -m src.scripts.import_dealopportunities
+#
+#      - name: Import Knightsbridge
+#        run: python -m src.scripts.import_knightsbridge
 
       # --------------------------------------------------
       # Phase 2 — Enrichment
@@ -84,17 +92,17 @@ jobs:
       - name: Enrich Axis Partnership
         run: python -m src.scripts.enrich_axispartnership
 
-      - name: Enrich BusinessBuyers
-        run: python -m src.scripts.enrich_businessbuyers
-
-      - name: Enrich BusinessesForSale
-        run: python -m src.scripts.enrich_businesses4sale
-
-      - name: Enrich DealOpportunities
-        run: python -m src.scripts.enrich_dealopportunities
-
-      - name: Enrich Knightsbridge
-        run: python -m src.scripts.enrich_knightsbridge
+#      - name: Enrich BusinessBuyers
+#        run: python -m src.scripts.enrich_businessbuyers
+#
+#      - name: Enrich BusinessesForSale
+#        run: python -m src.scripts.enrich_businesses4sale
+#
+#      - name: Enrich DealOpportunities
+#        run: python -m src.scripts.enrich_dealopportunities
+#
+#      - name: Enrich Knightsbridge
+#        run: python -m src.scripts.enrich_knightsbridge
 
       # --------------------------------------------------
       # Phase 3 — Intelligence
@@ -122,3 +130,15 @@ jobs:
         with:
           name: deals-sqlite
           path: db/deals.sqlite
+
+      # --------------------------------------------------
+      # Publish Release snapshot
+      # --------------------------------------------------
+      - name: Create or update DB snapshot release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: db-latest
+          name: Deal Pipeline SQLite (Latest)
+          files: db/deals.sqlite
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
