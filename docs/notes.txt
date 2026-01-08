@@ -1,3 +1,6 @@
+PRAGMA table_info(deals);
+
+
 -- sanity check first
 SELECT id, source_listing_id
 FROM deals
