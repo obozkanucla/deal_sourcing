@@ -46,22 +46,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download deals.sqlite (print asset ID)  # <<<
+      - name: Download deals.sqlite (print asset ID)
         run: |
           mkdir -p db
           ASSET_ID=$(gh release view db-latest --json assets \
             --jq '.assets[] | select(.name=="deals.sqlite") | .id')
-
+      
           if [ -z "$ASSET_ID" ]; then
             echo "❌ No deals.sqlite asset found"
             exit 1
           fi
-
+      
           echo "⬇️ Downloading asset ID: $ASSET_ID"
-
+      
           gh release download db-latest \
             --pattern deals.sqlite \
-            --output db/deals.sqlite
+            --output db/deals.sqlite \
             --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,8 +72,8 @@ jobs:
       # --------------------------------------------------
       # (Optional) Run migrations
       # --------------------------------------------------
-      # - name: Run SQL
-      #   run: python -m src.scripts.run_sql
+      - name: Run SQL
+        run: python -m src.scripts.run_sql
       #
       # - name: Check DB checksum AFTER SQL
       #   run: sha256sum db/deals.sqlite
