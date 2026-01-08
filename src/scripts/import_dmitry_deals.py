@@ -6,6 +6,10 @@ from src.persistence.repository import SQLiteRepository
 from src.integrations.google_sheets import get_gspread_client
 
 
+# -------------------------------------------------
+# CONFIG
+# -------------------------------------------------
+
 SPREADSHEET_ID = "1PgEknRWYb50fPVbtqfCdA4UU3oTuwi8X-X-MGOIA2VU"
 
 SHEETS = {
@@ -17,24 +21,13 @@ SHEETS = {
 DRY_RUN = False
 
 
-# -------------------------
-# Helpers
-# -------------------------
+# -------------------------------------------------
+# HELPERS
+# -------------------------------------------------
 
 def norm(x):
     return str(x or "").strip().lower()
 
-def map_interest_flag_to_decision(flag: str | None):
-    if not flag:
-        return None
-
-    flag = flag.strip().upper()
-
-    return {
-        "NO": "Pass",
-        "YES": "CIM",
-        "MAYBE": "Parked",
-    }.get(flag)
 
 def parse_money(val):
     try:
@@ -56,36 +49,52 @@ def parse_pct(val):
     except Exception:
         return None
 
+
+def map_interest_flag_to_decision(flag: str | None):
+    if not flag:
+        return None
+
+    flag = flag.strip().upper()
+    return {
+        "NO": "Pass",
+        "YES": "CIM",
+        "MAYBE": "On-Hold (UOffer)",
+    }.get(flag)
+
+
 def derive_title_from_description(desc: str | None) -> str | None:
     if not desc:
         return None
     return desc.split("\n")[0].strip()[:200]
 
-def fingerprint(sector_raw, location, revenue, ebitda):
+
+def fingerprint(sector_raw, location, revenue_k, ebitda_k):
     """
-    Stable identity across sheets.
-    DO NOT include description.
+    Stable identity for Dmitry deals.
+    Must never change once deployed.
     """
     key = "|".join([
         norm(sector_raw),
         norm(location),
-        str(int(revenue)) if revenue is not None else "",
-        str(int(ebitda)) if ebitda is not None else "",
+        str(int(revenue_k)) if revenue_k is not None else "",
+        str(int(ebitda_k)) if ebitda_k is not None else "",
     ])
     return hashlib.sha1(key.encode("utf-8")).hexdigest()
 
 
-# -------------------------
-# Main
-# -------------------------
+# -------------------------------------------------
+# MAIN
+# -------------------------------------------------
 
 def main():
     repo = SQLiteRepository(Path("db/deals.sqlite"))
     gc = get_gspread_client()
     sh = gc.open_by_key(SPREADSHEET_ID)
 
-    now = datetime.utcnow().isoformat()
-    imported, updated = 0, 0
+    now = datetime.utcnow().isoformat(timespec="seconds")
+
+    imported = 0
+    updated = 0
 
     for sheet_name, sheet_date in SHEETS.items():
         ws = sh.worksheet(sheet_name)
@@ -99,75 +108,94 @@ def main():
             sector_raw = row[0]
             location = row[1]
             description = row[2]
-            revenue_raw = parse_money(row[5])
-            ebitda_raw = parse_money(row[6]) if len(row) > 4 else None
 
-            revenue = round(revenue_raw / 1000, 1) if revenue_raw is not None else None
-            ebitda = round(ebitda_raw / 1000, 1) if ebitda_raw is not None else None
+            revenue_raw = parse_money(row[5]) if len(row) > 5 else None
+            ebitda_raw = parse_money(row[6]) if len(row) > 6 else None
             ebitda_margin = parse_pct(row[7]) if len(row) > 7 else None
             interest_flag = row[8] if len(row) > 8 else None
 
-            deal_fp = fingerprint(sector_raw, location, revenue, ebitda)
-            deal_id = f"Dmitry:{deal_fp}"
+            revenue_k = round(revenue_raw / 1000, 1) if revenue_raw is not None else None
+            ebitda_k = round(ebitda_raw / 1000, 1) if ebitda_raw is not None else None
+
+            source_listing_id = fingerprint(
+                sector_raw=sector_raw,
+                location=location,
+                revenue_k=revenue_k,
+                ebitda_k=ebitda_k,
+            )
 
             decision = map_interest_flag_to_decision(interest_flag)
 
             deal = {
-                "deal_id": deal_id,
+                # -------------------------
+                # Identity
+                # -------------------------
                 "source": "Dmitry",
-                "intermediary": "Dmitry Mykhailenko",
-                "source_listing_id": deal_fp,   # ✅ stable
+                "source_listing_id": source_listing_id,
                 "source_url": "dmitry-sheet",
-                "identity_method": "dmitry_fingerprint",
-                "content_hash": deal_fp,
+
+                # -------------------------
+                # Core descriptors
+                # -------------------------
                 "title": derive_title_from_description(description),
-                "description": description,
-                "sector_raw": sector_raw,
-                "industry_raw": None,
+                "industry": None,
+                "sector": None,
                 "location": location,
-                "revenue_k": revenue,
-                "ebitda_k": ebitda,
+                "incorporation_year": None,
+
+                # -------------------------
+                # Financials
+                # -------------------------
+                "revenue_k": revenue_k,
+                "ebitda_k": ebitda_k,
                 "asking_price_k": None,
-                # ✅ canonical decision
+                "profit_margin_pct": ebitda_margin,
+                "revenue_growth_pct": None,
+                "leverage_pct": None,
+
+                # -------------------------
+                # Workflow / decisioning
+                # -------------------------
+                "status": None,        # never touched by importers
+                "owner": None,
+                "priority": None,
+                "notes": None,
                 "decision": decision,
                 "decision_reason": None,
-                "status": None,  # ❌ never touch
-                # optional provenance (debuggable, not operational)
-                "notes": None,
+
+                # -------------------------
+                # Lifecycle
+                # -------------------------
                 "first_seen": sheet_date,
                 "last_seen": sheet_date,
-                "manual_imported_at": now,
+                "last_updated": now,
+                "last_updated_source": "AUTO",
+
+                # -------------------------
+                # Assets
+                # -------------------------
+                "drive_folder_url": None,
             }
 
             if DRY_RUN:
-                print(deal_id, sector_raw)
+                print("DRY:", deal)
                 continue
 
-            existing = repo.fetch_by_deal_id(deal_id)
+            existing = repo.fetch_by_source_and_listing(
+                source="Dmitry",
+                source_listing_id=source_listing_id,
+            )
 
-            if not existing:
-                repo.insert_raw_deal(deal)
-                imported += 1
-            else:
-                # 1️⃣ Enrich missing fields (safe, COALESCE)
-                repo.update_dmitry_enrichment(
-                    deal_id=deal_id,
-                    revenue_k=revenue,
-                    ebitda_k=ebitda,
-                    decision=decision,
-                    notes=None,
-                )
+            repo.upsert_deal_v2(deal)
 
-                # 2️⃣ Update seen dates
-                repo.upsert_dmitry_seen(
-                    deal_id=deal_id,
-                    first_seen=min(existing["first_seen"], sheet_date),
-                    last_seen=max(existing["last_seen"], sheet_date),
-                )
-
+            if existing:
                 updated += 1
+            else:
+                imported += 1
 
-    print(f"✅ Dmitry import complete — imported={imported}, updated={updated}")
+    print(
+        f"✅ Dmitry import complete — imported={imported}, updated={updated}"
+    )
 
 
 if __name__ == "__main__":

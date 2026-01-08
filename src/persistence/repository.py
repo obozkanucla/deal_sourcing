@@ -843,3 +843,86 @@ class SQLiteRepository:
         with self.get_conn() as conn:
             conn.execute(sql, values + [deal_id])
             conn.commit()
+
+    def upsert_deal_v2(self, deal: dict):
+        """
+        Canonical v2 upsert.
+        Identity = (source, source_listing_id)
+        Analyst-owned fields are never overwritten here.
+        """
+
+        cols = [
+            "source",
+            "source_listing_id",
+            "source_url",
+
+            "title",
+            "industry",
+            "sector",
+            "location",
+            "incorporation_year",
+
+            "revenue_k",
+            "ebitda_k",
+            "asking_price_k",
+            "profit_margin_pct",
+            "revenue_growth_pct",
+            "leverage_pct",
+
+            "ebitda_margin",
+            "revenue_multiple",
+            "ebitda_multiple",
+
+            "decision",
+            "decision_reason",
+
+            "first_seen",
+            "last_seen",
+            "last_updated",
+            "last_updated_source",
+
+            "drive_folder_url",
+        ]
+
+        values = [deal.get(c) for c in cols]
+
+        with self.get_conn() as conn:
+            conn.execute(
+                f"""
+                INSERT INTO deals (
+                    {", ".join(cols)}
+                )
+                VALUES (
+                    {", ".join(["?"] * len(cols))}
+                )
+                ON CONFLICT(source, source_listing_id)
+                DO UPDATE SET
+                    title = excluded.title,
+                    industry = excluded.industry,
+                    sector = excluded.sector,
+                    location = excluded.location,
+                    incorporation_year = excluded.incorporation_year,
+
+                    revenue_k = excluded.revenue_k,
+                    ebitda_k = excluded.ebitda_k,
+                    asking_price_k = excluded.asking_price_k,
+                    profit_margin_pct = excluded.profit_margin_pct,
+                    revenue_growth_pct = excluded.revenue_growth_pct,
+                    leverage_pct = excluded.leverage_pct,
+
+                    ebitda_margin = excluded.ebitda_margin,
+                    revenue_multiple = excluded.revenue_multiple,
+                    ebitda_multiple = excluded.ebitda_multiple,
+
+                    decision = excluded.decision,
+                    decision_reason = excluded.decision_reason,
+
+                    last_seen = excluded.last_seen,
+                    last_updated = excluded.last_updated,
+                    last_updated_source = excluded.last_updated_source,
+
+                    drive_folder_url = excluded.drive_folder_url
+                """,
+                values,
+            )
+            conn.commit()
