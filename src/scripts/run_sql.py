@@ -7,7 +7,8 @@ with repo.get_conn() as conn:
     # conn.execute("ALTER TABLE deals ADD COLUMN content_hash TEXT")
     # conn.execute("ALTER TABLE deals ADD COLUMN drive_folder_id TEXT")
     # conn.execute("ALTER TABLE deals ADD COLUMN detail_fetched_at DATETIME")
-    conn.execute("ALTER TABLE deals ADD COLUMN pdf_drive_url TEXT")
+    conn.execute("ALTER TABLE deals ADD COLUMN pdf_generated_at TEXT")
+    conn.execute("ALTER TABLE deals ADD COLUMN pdf_error TEXT")
     # count = conn.execute(
     #     "SELECT COUNT(*) FROM deals WHERE source = 'DealOpportunities'"
     # ).fetchone()[0]
