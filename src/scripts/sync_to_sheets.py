@@ -93,7 +93,7 @@ def main():
     reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
 
     # Clear all protections
-    clear_all_protections(ws)
+    # clear_all_protections(ws)
 
     # 3️⃣ Ensure headers (safe, non-destructive)
     ensure_sheet_headers(ws, DEAL_COLUMNS)
@@ -122,6 +122,7 @@ def main():
     )
 
     highlight_analyst_editable_columns(ws)
+
     protect_system_columns(ws,["burak@sab.partners",
                                "serdar@sab.partners",
                                "adrien@sab.partners"])
