@@ -1,4 +1,4 @@
-name: Deal Sheet Refresh Pipeline
+name: Dmitry Refresh
 
 on:
   schedule:
