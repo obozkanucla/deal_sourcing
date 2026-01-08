@@ -170,11 +170,20 @@ class SQLiteRepository:
             *,
             source: str,
             source_listing_id: str,
-            source_url: str,
-            sector_raw: Optional[str] = None,
+            source_url: str | None = None,
+
+            # raw broker truth
+            sector_raw: str | None = None,
+            location_raw: str | None = None,
+            turnover_range_raw: str | None = None,
+
+            # lifecycle
+            first_seen: str | None = None,
+            last_seen: str | None = None,
+            last_updated: str | None = None,
+            last_updated_source: str | None = None,
     ):
-        now = datetime.utcnow().isoformat()
-        today = date.today().isoformat()
+        now = datetime.utcnow().isoformat(timespec="seconds")
 
         with self.get_conn() as conn:
             conn.execute(
@@ -183,24 +192,34 @@ class SQLiteRepository:
                                    source_listing_id,
                                    source_url,
                                    sector_raw,
+                                   location_raw,
+                                   turnover_range_raw,
                                    first_seen,
                                    last_seen,
-                                   last_updated)
-                VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source, source_listing_id)
-                DO
+                                   last_updated,
+                                   last_updated_source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source, source_listing_id) DO
                 UPDATE SET
-                    sector_raw = excluded.sector_raw,
+                    source_url = excluded.source_url,
+                    sector_raw = COALESCE (excluded.sector_raw, deals.sector_raw),
+                    location_raw = COALESCE (excluded.location_raw, deals.location_raw),
+                    turnover_range_raw = COALESCE (excluded.turnover_range_raw, deals.turnover_range_raw),
+                    first_seen = COALESCE (deals.first_seen, excluded.first_seen),
                     last_seen = excluded.last_seen,
-                    last_updated = excluded.last_updated
+                    last_updated = excluded.last_updated,
+                    last_updated_source = excluded.last_updated_source;
                 """,
                 (
                     source,
                     source_listing_id,
                     source_url,
                     sector_raw,
-                    today,
-                    today,
-                    now,
+                    location_raw,
+                    turnover_range_raw,
+                    first_seen,
+                    last_seen,
+                    last_updated or now,
+                    last_updated_source or "AUTO",
                 ),
             )
 
