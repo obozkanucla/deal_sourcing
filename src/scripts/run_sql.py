@@ -15,6 +15,15 @@ with repo.get_conn() as conn:
     if not column_exists(conn, "deals", "extracted_json"):
         conn.execute("ALTER TABLE deals ADD COLUMN extracted_json TEXT")
 
+    if not column_exists(conn, "deals", "sector_source"):
+        conn.execute("ALTER TABLE deals ADD COLUMN sector_source TEXT")
+
+    if not column_exists(conn, "deals", "sector_inference_confidence"):
+        conn.execute("ALTER TABLE deals ADD COLUMN sector_inference_confidence REAL")
+
+    if not column_exists(conn, "deals", "sector_inference_reason"):
+        conn.execute("ALTER TABLE deals ADD COLUMN sector_inference_reason REAL")
+
     if not column_exists(conn, "deals", "turnover_range_raw"):
         conn.execute("ALTER TABLE deals ADD COLUMN turnover_range_raw TEXT")
 
