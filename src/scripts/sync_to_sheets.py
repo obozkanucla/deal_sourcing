@@ -61,9 +61,9 @@ DROPDOWNS = {
 import os
 
 PIPELINE_ENV = os.getenv("PIPELINE_ENV", "local")  # local | github
-SHEET_MODE = os.getenv("SHEET_MODE", "test")       # prod | test
+# SHEET_MODE = os.getenv("SHEET_MODE", "test")       # prod | test
 
-if SHEET_MODE == "prod":
+if PIPELINE_ENV == "github":
     SPREADSHEET_ID = SPREADSHEET_ID_Production
 else:
     SPREADSHEET_ID = SPREADSHEET_ID_Staging
@@ -72,6 +72,7 @@ DB_PATH = Path("db/deals.sqlite")
 
 def main():
     print("📄 Google Sheet:")
+    print(PIPELINE_ENV)
     print(f"   Spreadsheet ID: {SPREADSHEET_ID}")
     print(f"   Worksheet: {WORKSHEET_NAME}")
     print(f"   URL: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}")
