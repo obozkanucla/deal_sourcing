@@ -4,7 +4,12 @@ from datetime import datetime
 from src.persistence.repository import SQLiteRepository
 from src.brokers.dealopportunities_client import DealOpportunitiesClient
 
-DRY_RUN = False
+# ----------------------------------
+# DRY RUN CONFIG
+# ----------------------------------
+DRY_RUN = True
+DRY_RUN_PAGES = 2
+DRY_RUN_PREVIEW_LIMIT = 50  # safety cap for printing
 
 
 def main():
@@ -15,12 +20,15 @@ def main():
     client.start()          # 🔑 REQUIRED
 
     try:
-        rows = client.fetch_index(max_pages=100)
+        rows = client.fetch_index(
+            max_pages=DRY_RUN_PAGES if DRY_RUN else 100
+        )
     finally:
         client.stop()       # 🔑 ALWAYS clean up
 
     inserted = 0
     refreshed = 0
+    preview = []
 
     for r in rows:
         source = r["source"]
@@ -29,11 +37,13 @@ def main():
         exists = repo.deal_exists(source, source_listing_id)
 
         if DRY_RUN:
-            print(
-                source_listing_id,
-                r.get("location"),
-                r.get("turnover_range"),
-            )
+            preview.append({
+                "source_listing_id": source_listing_id,
+                "location_raw": r.get("location"),
+                "turnover_range_raw": r.get("turnover_range"),
+                "sector_raw": r.get("sectors_multi"),
+                "exists_in_db": exists,
+            })
             continue
 
         # -------------------------------------------------
@@ -46,6 +56,8 @@ def main():
             sector_raw=r.get("sectors_multi"),
             first_seen=None if exists else now,
             last_seen=now,
+            last_updated=now,
+            last_updated_source="AUTO",
         )
 
         repo.enrich_do_raw_fields(
@@ -55,8 +67,26 @@ def main():
             turnover_range_raw=r.get("turnover_range"),
         )
 
-        refreshed += exists
-        inserted += not exists
+        refreshed += int(exists)
+        inserted += int(not exists)
+
+    # ----------------------------------
+    # DRY RUN OUTPUT
+    # ----------------------------------
+    if DRY_RUN:
+        print(f"\n🧪 DRY RUN — previewing {min(len(preview), DRY_RUN_PREVIEW_LIMIT)} rows\n")
+
+        for row in preview[:DRY_RUN_PREVIEW_LIMIT]:
+            print(
+                row["source_listing_id"],
+                "| location:", row["location_raw"],
+                "| turnover:", row["turnover_range_raw"],
+                "| sector:", row["sector_raw"],
+                "| exists:", row["exists_in_db"],
+            )
+
+        print(f"\n🧪 DRY RUN complete — rows_fetched={len(preview)}")
+        return
 
     print(
         f"✅ DealOpportunities import complete — "
