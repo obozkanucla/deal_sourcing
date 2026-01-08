@@ -73,15 +73,18 @@ jobs:
       # --------------------------------------------------
       # Restore canonical SQLite DB from GitHub Release
       # --------------------------------------------------
-      - name: Download latest SQLite DB from release (if exists)
-        run: |
-          mkdir -p db
-          gh release download db-latest \
-            --pattern deals.sqlite \
-            --output db/deals.sqlite \
-            --clobber || echo "No existing DB found — starting fresh"
+      - name: Download db-latest SQLite
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: db-latest
+          files: deals.sqlite
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move DB into place
+        run: |
+          mkdir -p db
+          mv deals.sqlite db/deals.sqlite
 
 #      # --------------------------------------------------
 #      # Phase 0 — Legacy imports
