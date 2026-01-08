@@ -72,8 +72,8 @@ jobs:
       # --------------------------------------------------
       # (Optional) Run migrations
       # --------------------------------------------------
-#      - name: Run SQL
-#        run: python -m src.scripts.run_sql
+      - name: Run SQL
+        run: python -m src.scripts.run_sql
       #
       # - name: Check DB checksum AFTER SQL
       #   run: sha256sum db/deals.sqlite
