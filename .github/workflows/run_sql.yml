@@ -1,4 +1,4 @@
-name: Deal Sourcing Pipeline
+name: Run SQL Code
 
 on:
   schedule:
