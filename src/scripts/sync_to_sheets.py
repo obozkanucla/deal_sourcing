@@ -63,7 +63,7 @@ import os
 PIPELINE_ENV = os.getenv("PIPELINE_ENV", "local")  # local | github
 # SHEET_MODE = os.getenv("SHEET_MODE", "test")       # prod | test
 
-if PIPELINE_ENV == "github":
+if PIPELINE_ENV == "prod":
     SPREADSHEET_ID = SPREADSHEET_ID_Production
 else:
     SPREADSHEET_ID = SPREADSHEET_ID_Staging
