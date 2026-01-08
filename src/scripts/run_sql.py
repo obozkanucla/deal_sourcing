@@ -30,4 +30,10 @@ with repo.get_conn() as conn:
     if not column_exists(conn, "deals", "pdf_drive_url"):
         conn.execute("ALTER TABLE deals ADD COLUMN pdf_drive_url TEXT")
 
+    if not column_exists(conn, "deals", "pdf_generated_at"):
+        conn.execute("ALTER TABLE deals ADD COLUMN pdf_generated_at DATETIME")
+
+    if not column_exists(conn, "deals", "pdf_error"):
+        conn.execute("ALTER TABLE deals ADD COLUMN pdf_error TEXT")
+
     conn.commit()
