@@ -92,7 +92,6 @@ def map_turnover_range_to_revenue_k(raw: str | None) -> float | None:
 
     return None
 
-
 # =========================================================
 # ENRICHMENT
 # =========================================================
@@ -114,6 +113,7 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
             source_listing_id,
             source_url,
             title,
+            sector_raw,
             turnover_range_raw,
             revenue_k
         FROM deals
@@ -138,6 +138,7 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
         total = len(rows)
 
         for idx, r in enumerate(rows, start=1):
+            completed = idx + 1
             row_id = r["id"]
             deal_id = r["source_listing_id"]
             url = r["source_url"]
@@ -146,6 +147,13 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
             print(f"➡️ Fetching detail page:\n   {url}")
 
             pdf_path = PDF_ROOT / f"{deal_id}.pdf"
+
+            # HARD recycle every 25 deals
+            if completed % 25 == 0:
+                print("🔄 Restarting DealOpportunities browser")
+                client.stop()
+                client.start()
+                client._human_sleep()
 
             try:
                 html = client.fetch_listing_detail_and_pdf(
@@ -166,6 +174,10 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
                     )
                     conn.commit()
                 continue
+
+            # ✅ CRITICAL: cooldown after each deal
+            client._cooldown()
+
 
             title = extract_do_title(html) or r["title"]
             parsed = parse_do_detail(html)
@@ -192,7 +204,7 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
             # -------------------------------------------------
             # Sector / industry
             # -------------------------------------------------
-            raw_sector = parsed["facts"].get("sector")
+            raw_sector = r["sector_raw"]
             mapping = map_dealopportunities_sector(raw_sector=raw_sector)
 
             # -------------------------------------------------

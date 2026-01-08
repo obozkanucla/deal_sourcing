@@ -9,7 +9,7 @@ SELECT
     pdf_drive_url, industry, sector_raw
 FROM deals
 WHERE source = 'DealOpportunities'
-  AND source_listing_id = 'D13143';
+  AND source_listing_id = 'S12319';
 
 -- sanity check first
 SELECT id, source_listing_id
