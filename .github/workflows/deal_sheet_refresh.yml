@@ -2,7 +2,7 @@ name: Deal Sheet Refresh Pipeline
 
 on:
   schedule:
-    - cron: "* * * * *"   # daily at 05:00 UTC
+    - cron: "0 5 * * *"   # daily at 05:00 UTC
   workflow_dispatch:
 
 permissions:

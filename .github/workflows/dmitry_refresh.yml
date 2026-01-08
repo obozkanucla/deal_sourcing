@@ -1,8 +1,6 @@
 name: Dmitry Refresh
 
 on:
-  schedule:
-    - cron: "* * * * *"   # daily at 05:00 UTC
   workflow_dispatch:
 
 permissions:

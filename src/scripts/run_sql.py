@@ -8,5 +8,4 @@ with repo.get_conn() as conn:
         "ALTER TABLE deals ADD COLUMN turnover_range_raw TEXT;"
     )
     conn.commit()
-    conn.close()
 print(f"Added turnover_range_raw column.")
