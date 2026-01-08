@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # required for GitHub Releases
+  contents: write
   actions: read
 
 jobs:
@@ -14,34 +14,11 @@ jobs:
 
     env:
       PLAYWRIGHT_HEADLESS: "1"
-
-      # -----------------------------
-      # Broker credentials
-      # -----------------------------
-      BB_USERNAME: ${{ secrets.BB_USERNAME }}
-      BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
-
-      # -----------------------------
-      # Slack
-      # -----------------------------
-      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
-
-      # -----------------------------
-      # Google APIs (OAuth user)
-      # -----------------------------
-      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-      GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
-
-      # -----------------------------
-      # Pipeline safety
-      # -----------------------------
       PIPELINE_ENV: github
 
     steps:
       # --------------------------------------------------
-      # Checkout code
+      # Checkout
       # --------------------------------------------------
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -60,96 +37,49 @@ jobs:
           pip install -r requirements.txt
 
       # --------------------------------------------------
-      # Playwright
+      # Restore canonical SQLite DB
       # --------------------------------------------------
-      - name: Install Playwright browsers
+      - name: Inspect release assets (sanity check)   # <<<
         run: |
-          python -m playwright install chromium --with-deps
+          gh release view db-latest --json assets \
+            --jq '.assets[] | "\(.id) \(.name)"'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # --------------------------------------------------
-      # Restore canonical SQLite DB from GitHub Release
-      # --------------------------------------------------
-      - name: Download latest SQLite DB from release (if exists)
+      - name: Download deals.sqlite (print asset ID)  # <<<
         run: |
           mkdir -p db
+          ASSET_ID=$(gh release view db-latest --json assets \
+            --jq '.assets[] | select(.name=="deals.sqlite") | .id')
+
+          if [ -z "$ASSET_ID" ]; then
+            echo "❌ No deals.sqlite asset found"
+            exit 1
+          fi
+
+          echo "⬇️ Downloading asset ID: $ASSET_ID"
+
           gh release download db-latest \
             --pattern deals.sqlite \
-            --output db/deals.sqlite || echo "No existing DB found — starting fresh"
+            --output db/deals.sqlite
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check DB checksum BEFORE SQL
         run: sha256sum db/deals.sqlite
 
-#      - name: Run SQL
-#        run: python -m src.scripts.run_sql
-#
-#      - name: Check DB checksum AFTER SQL
-#        run: sha256sum db/deals.sqlite
+      # --------------------------------------------------
+      # (Optional) Run migrations
+      # --------------------------------------------------
+      # - name: Run SQL
+      #   run: python -m src.scripts.run_sql
+      #
+      # - name: Check DB checksum AFTER SQL
+      #   run: sha256sum db/deals.sqlite
 
       # --------------------------------------------------
-      # Phase 0 — Legacy imports
+      # Debug schema
       # --------------------------------------------------
-#      - name: Import legacy deals
-#        run: python -m src.scripts.import_legacy_deals
-#
-#      - name: Import Dmitry deals
-#        run: python -m src.scripts.import_dmitry_deals
-
-      # --------------------------------------------------
-      # Phase 1 — Broker imports
-      # --------------------------------------------------
-#      - name: Import Axis Partnership
-#        run: python -m src.scripts.import_axispartnership
-#
-#      - name: Import BusinessBuyers
-#        run: python -m src.scripts.import_businessbuyers
-#
-#      - name: Import BusinessesForSale
-#        run: python -m src.scripts.import_businesses4sale
-#
-#      - name: Import DealOpportunities
-#        run: python -m src.scripts.import_dealopportunities
-#
-#      - name: Import Knightsbridge
-#        run: python -m src.scripts.import_knightsbridge
-#
-#      # --------------------------------------------------
-#      # Phase 2 — Enrichment
-#      # --------------------------------------------------
-#      - name: Enrich Axis Partnership
-#        run: python -m src.scripts.enrich_axispartnership
-#
-#      - name: Enrich BusinessBuyers
-#        run: python -m src.scripts.enrich_businessbuyers
-#
-#      - name: Enrich BusinessesForSale
-#        run: python -m src.scripts.enrich_businesses4sale
-#
-#      - name: Enrich DealOpportunities
-#        run: python -m src.scripts.enrich_dealopportunities
-#
-#      - name: Enrich Knightsbridge
-#        run: python -m src.scripts.enrich_knightsbridge
-#
-#      # --------------------------------------------------
-#      # Phase 3 — Intelligence
-#      # --------------------------------------------------
-#      - name: Infer sectors + move Drive folders
-#        run: python -m src.scripts.infer_sectors
-#
-#      - name: Enrich financials from descriptions
-#        run: python -m src.scripts.enrich_financials_from_description
-#
-#      - name: Recalculate financial metrics
-#        run: python -m src.scripts.recalculate_financial_metrics
-#
-#      # --------------------------------------------------
-#      # Phase 4 — Sync outputs
-#      # --------------------------------------------------
-#      - name: Sync SQLite → Google Sheets
-#        run: python -m src.scripts.sync_to_sheets
-
       - name: Debug SQLite schema
         run: |
           python - << 'EOF'
@@ -158,35 +88,36 @@ jobs:
 
           db = Path("db/deals.sqlite")
           print("DB exists:", db.exists())
-          print("DB size:", db.stat().st_size if db.exists() else "N/A")
+          print("DB size:", db.stat().st_size)
 
           conn = sqlite3.connect(db)
           cur = conn.cursor()
-
-          print("\n--- tables ---")
-          for r in cur.execute("SELECT name FROM sqlite_master WHERE type='table'"):
-              print(r)
 
           print("\n--- deals schema ---")
           for r in cur.execute("PRAGMA table_info(deals)"):
               print(r)
 
           print("\n--- row count ---")
-          try:
-              print(cur.execute("SELECT COUNT(*) FROM deals").fetchone())
-          except Exception as e:
-              print("COUNT failed:", e)
+          print(cur.execute("SELECT COUNT(*) FROM deals").fetchone())
 
           conn.close()
           EOF
+
       # --------------------------------------------------
-      # Persist canonical SQLite snapshot
+      # Enforce single-asset truth BEFORE upload
       # --------------------------------------------------
-      - name: Publish SQLite snapshot to GitHub Release
+      - name: Delete existing deals.sqlite asset        # <<<
+        run: |
+          gh release delete-asset db-latest deals.sqlite -y || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish SQLite snapshot to GitHub Release # <<<
         uses: softprops/action-gh-release@v2
         with:
           tag_name: db-latest
           name: Deal Pipeline SQLite (Latest)
           files: db/deals.sqlite
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
