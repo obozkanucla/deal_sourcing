@@ -78,8 +78,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-#      - name: Run SQL
-#        run: python -m src.scripts.run_sql
+      - name: Check DB checksum BEFORE SQL
+        run: sha256sum db/deals.sqlite
+
+      - name: Run SQL
+        run: python -m src.scripts.run_sql
+
+      - name: Check DB checksum AFTER SQL
+        run: sha256sum db/deals.sqlite
 
       # --------------------------------------------------
       # Phase 0 — Legacy imports
