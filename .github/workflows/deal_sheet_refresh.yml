@@ -71,7 +71,7 @@ jobs:
 #          python -m playwright install chromium --with-deps
 
       # --------------------------------------------------
-      # Restore canonical SQLite DB from GitHub Release
+      # Restore canonical SQLite DB from GitHub Releaseq
       # --------------------------------------------------
       - name: Download db-latest SQLite
         uses: softprops/action-gh-release@v2
