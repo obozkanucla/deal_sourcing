@@ -83,6 +83,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Import legacy deals
+        run: python -m src.scripts.reset_legacy_deals
+
 #      # --------------------------------------------------
 #      # Phase 0 — Legacy imports
 #      # --------------------------------------------------
