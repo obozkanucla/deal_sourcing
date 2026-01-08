@@ -926,3 +926,30 @@ class SQLiteRepository:
                 values,
             )
             conn.commit()
+
+    def enrich_do_raw_fields(
+            self,
+            source: str,
+            source_listing_id: str,
+            *,
+            location_raw: str | None,
+            turnover_range_raw: str | None,
+    ):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET location_raw        = COALESCE(location_raw, ?),
+                    turnover_range_raw  = COALESCE(turnover_range_raw, ?),
+                    last_updated        = CURRENT_TIMESTAMP,
+                    last_updated_source = 'AUTO'
+                WHERE source = ?
+                  AND source_listing_id = ?
+                """,
+                (
+                    location_raw,
+                    turnover_range_raw,
+                    source,
+                    source_listing_id,
+                ),
+            )

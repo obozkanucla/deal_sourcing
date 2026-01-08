@@ -43,23 +43,20 @@ def main():
             source=source,
             source_listing_id=source_listing_id,
             source_url=r["source_url"],
-
-            # raw broker truth
             sector_raw=r.get("sectors_multi"),
-            location_raw=r.get("location"),
-            turnover_range_raw=r.get("turnover_range"),
-
-            # lifecycle
             first_seen=None if exists else now,
             last_seen=now,
-            last_updated=now,
-            last_updated_source="AUTO",
         )
 
-        if exists:
-            refreshed += 1
-        else:
-            inserted += 1
+        repo.enrich_do_raw_fields(
+            source=source,
+            source_listing_id=source_listing_id,
+            location_raw=r.get("location"),
+            turnover_range_raw=r.get("turnover_range"),
+        )
+
+        refreshed += exists
+        inserted += not exists
 
     print(
         f"✅ DealOpportunities import complete — "
