@@ -1,6 +1,16 @@
 PRAGMA table_info(deals);
 
 
+SELECT
+    source_listing_id,
+    title,
+    drive_folder_id,
+    drive_folder_url,
+    pdf_drive_url, industry, sector_raw
+FROM deals
+WHERE source = 'DealOpportunities'
+  AND source_listing_id = 'D13143';
+
 -- sanity check first
 SELECT id, source_listing_id
 FROM deals

@@ -17,7 +17,6 @@ from src.integrations.google_drive import (
     find_or_create_deal_folder,
     upload_pdf_to_drive,
 )
-from src.persistence.deal_artifacts import record_deal_artifact
 from src.sector_mappings.dealopportunities import map_dealopportunities_sector
 
 
@@ -26,15 +25,13 @@ from src.sector_mappings.dealopportunities import map_dealopportunities_sector
 # =========================================================
 
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
-
 PDF_ROOT = Path("/tmp/do_pdfs")
 PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
-DRY_RUN = os.getenv("DRY_RUN", "0") == "1"
-
+DRY_RUN = False # os.getenv("DRY_RUN", "0") == "1"
 
 # =========================================================
-# PARSING (DETAIL PAGE ONLY)
+# HELPERS
 # =========================================================
 
 def parse_do_detail(html: str) -> dict:
@@ -52,16 +49,16 @@ def parse_do_detail(html: str) -> dict:
     for dt in soup.select("dl dt"):
         label = dt.get_text(strip=True).lower()
         dd = dt.find_next_sibling("dd")
-        value = dd.get_text(strip=True) if dd else None
-        if not value:
+        val = dd.get_text(strip=True) if dd else None
+        if not val:
             continue
 
         if "sector" in label:
-            facts["sector"] = value
+            facts["sector"] = val
         elif "region" in label:
-            facts["region"] = value
+            facts["region"] = val
         elif "reference" in label:
-            facts["reference"] = value
+            facts["reference"] = val
 
     return {
         "description": description,
@@ -71,20 +68,15 @@ def parse_do_detail(html: str) -> dict:
 
 def extract_do_title(html: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
-    h1_link = soup.select_one("h1 > a[href*='/opportunity/']")
-    return h1_link.get_text(strip=True) if h1_link else None
+    h1 = soup.select_one("h1 > a[href*='/opportunity/']")
+    return h1.get_text(strip=True) if h1 else None
 
-
-# =========================================================
-# TURNOVER → REVENUE (IMPORT-ONLY INPUT)
-# =========================================================
 
 def map_turnover_range_to_revenue_k(raw: str | None) -> float | None:
     if not raw:
         return None
 
     s = raw.lower().strip()
-
     ranges = {
         "under £500k": 250,
         "£500k–£1m": 750,
@@ -126,10 +118,7 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
             revenue_k
         FROM deals
         WHERE source = 'DealOpportunities'
-          AND (
-            pdf_generated_at IS NULL
-            OR pdf_error IS NOT NULL
-          )
+          AND detail_fetched_at IS NULL
         ORDER BY last_seen DESC
         """
     ).fetchall()
@@ -146,56 +135,49 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
     client.start()
 
     try:
+        total = len(rows)
+
         for idx, r in enumerate(rows, start=1):
             row_id = r["id"]
-            deal_key = r["source_listing_id"]
+            deal_id = r["source_listing_id"]
             url = r["source_url"]
 
-            print(f"\n[{idx}/{len(rows)}] ➜ {deal_key}")
+            print(f"\n[{idx}/{total}] ➜ {deal_id}")
+            print(f"➡️ Fetching detail page:\n   {url}")
 
-            if DRY_RUN:
-                print("  🧪 DRY RUN — skipping fetch")
-                continue
-
-            conn.execute(
-                """
-                UPDATE deals
-                SET pdf_error = NULL,
-                    last_updated = CURRENT_TIMESTAMP
-                WHERE id = ?
-                """,
-                (row_id,),
-            )
-            conn.commit()
-
-            pdf_path = PDF_ROOT / f"{deal_key}.pdf"
+            pdf_path = PDF_ROOT / f"{deal_id}.pdf"
 
             try:
-                html = client.fetch_listing_detail_and_pdf(url, pdf_path)
-            except PlaywrightError as e:
-                conn.execute(
-                    """
-                    UPDATE deals
-                    SET pdf_error = ?,
-                        last_updated = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (str(e)[:500], row_id),
+                html = client.fetch_listing_detail_and_pdf(
+                    url=url,
+                    pdf_path=pdf_path,
                 )
-                conn.commit()
+            except PlaywrightError as e:
+                print("  ❌ Detail fetch failed")
+                if not DRY_RUN:
+                    conn.execute(
+                        """
+                        UPDATE deals
+                        SET pdf_error = ?,
+                            last_updated = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                        (str(e)[:500], row_id),
+                    )
+                    conn.commit()
                 continue
 
             title = extract_do_title(html) or r["title"]
             parsed = parse_do_detail(html)
 
-            # -----------------------------------------
-            # Revenue inference (ONLY if missing)
-            # -----------------------------------------
+            # -------------------------------------------------
+            # Revenue inference (from IMPORTED turnover)
+            # -------------------------------------------------
             if r["revenue_k"] is None:
                 inferred = map_turnover_range_to_revenue_k(
                     r["turnover_range_raw"]
                 )
-                if inferred is not None:
+                if inferred is not None and not DRY_RUN:
                     conn.execute(
                         """
                         UPDATE deals
@@ -207,36 +189,50 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
                         (inferred, row_id),
                     )
 
-            # -----------------------------------------
-            # Sector / Industry
-            # -----------------------------------------
-            mapping = map_dealopportunities_sector(
-                raw_sector=parsed["facts"].get("sector")
-            )
+            # -------------------------------------------------
+            # Sector / industry
+            # -------------------------------------------------
+            raw_sector = parsed["facts"].get("sector")
+            mapping = map_dealopportunities_sector(raw_sector=raw_sector)
 
-            content_hash = hashlib.sha256(html.encode()).hexdigest()
+            # -------------------------------------------------
+            # Drive folder + PDF upload
+            # -------------------------------------------------
+            drive_folder_url = None
+            drive_folder_id = None
+            pdf_drive_url = None
+            pdf_error = None
 
-            # -----------------------------------------
-            # Drive + PDF
-            # -----------------------------------------
             try:
-                parent_folder_id = get_drive_parent_folder_id(
+                parent_id = get_drive_parent_folder_id(
                     industry=mapping["industry"],
                     broker="DealOpportunities",
                 )
 
-                deal_folder_id = find_or_create_deal_folder(
-                    parent_folder_id=parent_folder_id,
-                    deal_id=deal_key,
+                drive_folder_id = find_or_create_deal_folder(
+                    parent_folder_id=parent_id,
+                    deal_id=deal_id,
                     deal_title=title,
+                )
+
+                drive_folder_url = (
+                    f"https://drive.google.com/drive/folders/{drive_folder_id}"
                 )
 
                 pdf_drive_url = upload_pdf_to_drive(
                     local_path=pdf_path,
-                    filename=f"{deal_key}.pdf",
-                    folder_id=deal_folder_id,
+                    filename=f"{deal_id}.pdf",
+                    folder_id=drive_folder_id,
                 )
 
+            except (HttpError, RuntimeError) as e:
+                pdf_error = str(e)[:500]
+                print("  ⚠️ PDF / Drive failed")
+
+            # -------------------------------------------------
+            # Final DB update
+            # -------------------------------------------------
+            if not DRY_RUN:
                 conn.execute(
                     """
                     UPDATE deals
@@ -245,17 +241,21 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
                         description = ?,
                         extracted_json = ?,
                         content_hash = ?,
+
                         industry = ?,
                         sector = ?,
                         sector_source = 'broker',
                         sector_inference_confidence = ?,
                         sector_inference_reason = ?,
+
                         drive_folder_id = ?,
                         drive_folder_url = ?,
                         pdf_drive_url = ?,
-                        pdf_generated_at = CURRENT_TIMESTAMP,
-                        pdf_error = NULL,
-                        last_updated = CURRENT_TIMESTAMP,
+                        pdf_generated_at = ?,
+                        pdf_error = ?,
+
+                        detail_fetched_at = ?,
+                        last_updated = ?,
                         last_updated_source = 'AUTO'
                     WHERE id = ?
                     """,
@@ -263,49 +263,28 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
                         title,
                         parsed["description"],
                         json.dumps(parsed["facts"]),
-                        content_hash,
+                        hashlib.sha256(html.encode()).hexdigest(),
+
                         mapping["industry"],
                         mapping["sector"],
                         mapping["confidence"],
                         mapping["reason"],
-                        deal_folder_id,
-                        f"https://drive.google.com/drive/folders/{deal_folder_id}",
+
+                        drive_folder_id,
+                        drive_folder_url,
                         pdf_drive_url,
+                        datetime.utcnow().isoformat(timespec="seconds"),
+                        pdf_error,
+
+                        datetime.utcnow().isoformat(timespec="seconds"),
+                        datetime.utcnow().isoformat(timespec="seconds"),
                         row_id,
                     ),
                 )
-
-                record_deal_artifact(
-                    conn=conn,
-                    deal_id=row_id,
-                    broker="DealOpportunities",
-                    artifact_type="pdf",
-                    artifact_name=f"{deal_key}.pdf",
-                    drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
-                    drive_url=pdf_drive_url,
-                    industry=mapping["industry"],
-                    sector=mapping["sector"],
-                    created_by="enrich_dealopportunities.py",
-                )
-
                 conn.commit()
-                print("  ✅ Enriched")
 
-            except (HttpError, Exception) as e:
-                conn.execute(
-                    """
-                    UPDATE deals
-                    SET pdf_error = ?,
-                        last_updated = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (str(e)[:500], row_id),
-                )
-                conn.commit()
-                print("  ⚠️ PDF / Drive failed")
-
-            finally:
-                pdf_path.unlink(missing_ok=True)
+            pdf_path.unlink(missing_ok=True)
+            print("  ✅ Enriched")
 
     finally:
         client.stop()
@@ -319,6 +298,6 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
 # =========================================================
 
 if __name__ == "__main__":
-    limit_env = os.getenv("ENRICH_LIMIT")
+    limit_env = None #os.getenv("ENRICH_LIMIT")
     limit = None if not limit_env else int(limit_env)
     enrich_dealopportunities(limit)
