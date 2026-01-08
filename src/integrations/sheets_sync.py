@@ -375,8 +375,8 @@ def header_to_col_idx(ws):
 def apply_status_rules(ws, col_idx):
     rules = {
         "Pass":   {"red": 0.95, "green": 0.8,  "blue": 0.8},
-        "CIM":    {"red": 0.8,  "green": 0.95, "blue": 0.8},
-        "Parked": {"red": 1.0,  "green": 0.9,  "blue": 0.6},
+        "Progress":    {"red": 0.8,  "green": 0.95, "blue": 0.8},
+        "Park": {"red": 1.0,  "green": 0.9,  "blue": 0.6},
     }
 
     requests = []
@@ -752,7 +752,7 @@ def apply_decision_dropdown(ws, col_idx: int):
     """
     DECISION_DROPDOWN = [
         "Pass",
-        "Hold",
+        "Park",
         "Progress",
     ]
     requests = [
