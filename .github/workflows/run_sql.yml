@@ -78,8 +78,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run SQL
-        run: python -m src.scripts.run_sql
+#      - name: Run SQL
+#        run: python -m src.scripts.run_sql
 
       # --------------------------------------------------
       # Phase 0 — Legacy imports
