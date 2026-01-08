@@ -149,7 +149,7 @@ def main():
                 "revenue_k": revenue_k,
                 "ebitda_k": ebitda_k,
                 "asking_price_k": None,
-                "profit_margin_pct": ebitda_margin,
+                "ebitda_margin": ebitda_margin,
                 "revenue_growth_pct": None,
                 "leverage_pct": None,
 
