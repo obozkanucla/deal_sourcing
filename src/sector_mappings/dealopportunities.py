@@ -1,11 +1,11 @@
 """
 DealOpportunities → Canonical Industry / Sector Mapping
 
-Rules:
-- Broker sector dropdown is authoritative
-- Deterministic resolution for multi-sector listings
-- High confidence (broker-declared)
-- No keyword inference
+Principles:
+- Broker sector is authoritative
+- Industry reflects economic model (how money is made)
+- Deterministic resolution (no NLP / keyword inference)
+- Defaults bias toward Business Services, not Industrials
 """
 
 BROKER_NAME = "DealOpportunities"
@@ -15,27 +15,38 @@ BROKER_NAME = "DealOpportunities"
 # NORMALIZATION
 # -------------------------------------------------------------------
 
-def _normalize_sector_key(s: str) -> str:
-    return s.strip().lower()
+def _canonicalize_sector(s: str) -> str:
+    """
+    Normalize raw broker sector strings so dictionary lookup is stable.
+    """
+    return (
+        s.replace("\xa0", " ")     # NBSP
+         .replace("&amp;", "&")   # HTML entity
+         .strip()
+         .title()
+    )
 
 
-# -------------------------------------------------------------------
-# INDUSTRY PRIORITY (deterministic conflict resolution)
-# -------------------------------------------------------------------
+def normalize_do_sector(raw: str | None) -> str | None:
+    if not raw:
+        return None
 
-INDUSTRY_PRIORITY = [
-    "Healthcare",
-    "Education",
-    "Food_Beverage",
-    "Consumer_Retail",
-    "Business_Services",
-    "Technology",
-    "Media_Communications",
-    "Industrials",
-    "Construction_Built_Environment",
-    "Agriculture",
-    "Other",
-]
+    s = _canonicalize_sector(raw)
+
+    COLLAPSE = {
+        # Services
+        "Engineering": "Engineering Services",
+        "Service Industries": "Business Services",
+        "Professional & Financial": "Professional Services",
+
+        # Logistics
+        "Distribution, Freight & Logistics": "Logistics",
+
+        # Food
+        "Food & Drink": "Food & Beverage",
+    }
+
+    return COLLAPSE.get(s, s)
 
 
 # -------------------------------------------------------------------
@@ -44,244 +55,224 @@ INDUSTRY_PRIORITY = [
 
 DEALOPPORTUNITIES_SECTOR_MAP = {
 
-    # -----------------------------
-    # HEALTHCARE & CARE (TOP PRIORITY)
-    # -----------------------------
-    "Health & care": {
+    # -------------------------------------------------
+    # HEALTHCARE
+    # -------------------------------------------------
+    "Health & Care": {
         "industry": "Healthcare",
         "sector": "Healthcare Services",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Health & care sector",
+        "reason": "Broker-declared healthcare services",
     },
     "Medical": {
         "industry": "Healthcare",
         "sector": "Medical Services",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Medical sector",
+        "reason": "Broker-declared medical sector",
     },
 
-    # -----------------------------
+    # -------------------------------------------------
     # EDUCATION
-    # -----------------------------
+    # -------------------------------------------------
     "Education": {
         "industry": "Education",
         "sector": "Education Services",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Education sector",
+        "reason": "Broker-declared education sector",
     },
 
-    # -----------------------------
-    # FOOD, HOSPITALITY & LEISURE
-    # -----------------------------
-    "Food & drink": {
+    # -------------------------------------------------
+    # FOOD / HOSPITALITY / LEISURE
+    # -------------------------------------------------
+    "Food & Beverage": {
         "industry": "Food_Beverage",
         "sector": "Food & Beverage",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Food & drink sector",
+        "reason": "Broker-declared food & beverage",
     },
-    "Hotels & restaurants": {
+    "Hotels & Restaurants": {
         "industry": "Consumer_Retail",
         "sector": "Hospitality",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Hotels & restaurants sector",
+        "reason": "Broker-declared hospitality",
     },
     "Leisure": {
         "industry": "Consumer_Retail",
-        "sector": "Leisure / Entertainment",
+        "sector": "Leisure & Entertainment",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Leisure sector",
+        "reason": "Broker-declared leisure sector",
     },
     "Tourism": {
         "industry": "Consumer_Retail",
-        "sector": "Tourism & Travel",
+        "sector": "Travel & Tourism",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Tourism sector",
+        "reason": "Broker-declared tourism sector",
     },
 
-    # -----------------------------
-    # INDUSTRIALS & ENGINEERING
-    # -----------------------------
+    # -------------------------------------------------
+    # INDUSTRIALS (ASSET-HEAVY ONLY)
+    # -------------------------------------------------
     "Manufacturing": {
         "industry": "Industrials",
         "sector": "Manufacturing",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Manufacturing sector",
-    },
-    "Engineering": {
-        "industry": "Industrials",
-        "sector": "Engineering Services",
-        "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Engineering sector",
+        "reason": "Asset-heavy manufacturing business",
     },
     "Automotive": {
         "industry": "Industrials",
         "sector": "Automotive",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Automotive sector",
+        "reason": "Broker-declared automotive sector",
     },
     "Aviation": {
         "industry": "Industrials",
         "sector": "Aviation & Aerospace",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Aviation sector",
+        "reason": "Broker-declared aviation sector",
     },
-    "Mining & quarrying": {
+    "Mining & Quarrying": {
         "industry": "Industrials",
         "sector": "Mining & Quarrying",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Mining & quarrying sector",
+        "reason": "Broker-declared extractive industry",
     },
 
-    # -----------------------------
-    # CONSTRUCTION & PROPERTY
-    # -----------------------------
+    # -------------------------------------------------
+    # CONSTRUCTION / BUILT ENVIRONMENT
+    # -------------------------------------------------
     "Construction": {
         "industry": "Construction_Built_Environment",
         "sector": "Construction",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Construction sector",
+        "reason": "Broker-declared construction sector",
     },
-    "Real estate activities": {
+    "Real Estate Activities": {
         "industry": "Construction_Built_Environment",
         "sector": "Real Estate",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Real estate activities sector",
+        "reason": "Broker-declared real estate activities",
     },
-    "Electricity, gas & water supply": {
+    "Electricity, Gas & Water Supply": {
         "industry": "Construction_Built_Environment",
         "sector": "Utilities",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Utilities sector",
+        "reason": "Broker-declared utilities sector",
     },
 
-    # -----------------------------
-    # BUSINESS & PROFESSIONAL SERVICES
-    # -----------------------------
-    "Business services": {
+    # -------------------------------------------------
+    # BUSINESS SERVICES (MOST IMPORTANT FIX)
+    # -------------------------------------------------
+    "Business Services": {
         "industry": "Business_Services",
         "sector": "Business Services",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Business services sector",
+        "reason": "Fee-based business services",
     },
-    "Professional & financial": {
+    "Professional Services": {
         "industry": "Business_Services",
-        "sector": "Professional & Financial Services",
+        "sector": "Professional Services",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Professional & financial sector",
+        "reason": "Professional / advisory services",
     },
     "Recruitment": {
         "industry": "Business_Services",
         "sector": "Recruitment Services",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Recruitment sector",
+        "reason": "Broker-declared recruitment services",
     },
-    "Service industries": {
+    "Engineering Services": {
         "industry": "Business_Services",
-        "sector": "Service Industries",
-        "confidence": 0.9,
-        "reason": "DealOpportunities broker-declared Service industries sector",
+        "sector": "Engineering & Technical Services",
+        "confidence": 0.95,
+        "reason": "Engineering services are fee-based, not asset-intensive",
     },
 
-    # -----------------------------
-    # RETAIL, WHOLESALE & DISTRIBUTION
-    # -----------------------------
-    "Retail & wholesale": {
+    # -------------------------------------------------
+    # LOGISTICS (SERVICE-FIRST DEFAULT)
+    # -------------------------------------------------
+    "Logistics": {
+        "industry": "Business_Services",
+        "sector": "Logistics & Supply Chain Services",
+        "confidence": 0.9,
+        "reason": "Managed or brokered logistics services",
+    },
+
+    # -------------------------------------------------
+    # RETAIL / DISTRIBUTION
+    # -------------------------------------------------
+    "Retail & Wholesale": {
         "industry": "Consumer_Retail",
         "sector": "Retail & Wholesale",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Retail & wholesale sector",
+        "reason": "Broker-declared retail & wholesale",
     },
-    "Distribution, freight & logistics": {
-        "industry": "Industrials",
-        "sector": "Logistics & Distribution",
-        "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Distribution & logistics sector",
-    },
-    "Motor dealerships": {
+    "Motor Dealerships": {
         "industry": "Consumer_Retail",
         "sector": "Motor Dealerships",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Motor dealerships sector",
+        "reason": "Broker-declared motor dealerships",
     },
 
-    # -----------------------------
-    # MEDIA, CREATIVE & TECHNOLOGY
-    # -----------------------------
-    "Advertising & media": {
+    # -------------------------------------------------
+    # MEDIA / TECHNOLOGY
+    # -------------------------------------------------
+    "Advertising & Media": {
         "industry": "Media_Communications",
         "sector": "Advertising & Media",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Advertising & media sector",
+        "reason": "Broker-declared media sector",
     },
-    "Creative industries": {
+    "Creative Industries": {
         "industry": "Media_Communications",
         "sector": "Creative Industries",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Creative industries sector",
+        "reason": "Broker-declared creative industries",
     },
-    "Printing & publishing": {
+    "Printing & Publishing": {
         "industry": "Media_Communications",
         "sector": "Printing & Publishing",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Printing & publishing sector",
+        "reason": "Broker-declared printing & publishing",
     },
     "Technology": {
         "industry": "Technology",
         "sector": "Technology Services",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Technology sector",
+        "reason": "Broker-declared technology services",
     },
 
-    # -----------------------------
+    # -------------------------------------------------
     # AGRICULTURE
-    # -----------------------------
-    "Agriculture, forestry & fishing": {
+    # -------------------------------------------------
+    "Agriculture, Forestry & Fishing": {
         "industry": "Agriculture",
         "sector": "Agriculture, Forestry & Fishing",
         "confidence": 0.95,
-        "reason": "DealOpportunities broker-declared Agriculture sector",
-    },
-
-    # -----------------------------
-    # MISC
-    # -----------------------------
-    "Miscellaneous": {
-        "industry": "Other",
-        "sector": "Miscellaneous",
-        "confidence": 0.8,
-        "reason": "DealOpportunities broker-declared Miscellaneous sector",
+        "reason": "Broker-declared agriculture sector",
     },
 }
+
+
 # -------------------------------------------------------------------
 # PUBLIC API
 # -------------------------------------------------------------------
-def _canonicalize_sector(s: str) -> str:
-    """
-    Normalizes broker sector strings so dictionary lookup is stable.
-    """
-    return (
-        s.replace("\xa0", " ")   # non-breaking spaces
-         .replace("&amp;", "&") # HTML entities
-         .strip()
-    )
 
-def map_dealopportunities_sector(*, raw_sector: str | None):
+def map_dealopportunities_sector(*, raw_sector: str | None) -> dict:
     """
-    Maps DealOpportunities broker-declared sector(s) to canonical industry/sector.
-    Supports comma-separated sectors by choosing the first known one.
+    Maps DealOpportunities broker-declared sector(s)
+    to canonical industry / sector.
     """
 
     if not raw_sector:
         return {
-            "industry": "Other",
-            "sector": "Miscellaneous",
-            "confidence": 0.2,
-            "reason": "Missing DealOpportunities sector",
+            "industry": "Business_Services",
+            "sector": "General Services",
+            "confidence": 0.3,
+            "reason": "Missing DealOpportunities sector, defaulted to services",
         }
 
-    # Split + canonicalize
     candidates = [
-        _canonicalize_sector(s)
+        normalize_do_sector(s)
         for s in raw_sector.split(",")
         if s.strip()
     ]
@@ -291,10 +282,10 @@ def map_dealopportunities_sector(*, raw_sector: str | None):
         if mapping:
             return mapping
 
-    # Nothing matched
+    # Fallback: bias toward services, not industrials
     return {
-        "industry": "Other",
-        "sector": "Miscellaneous",
+        "industry": "Business_Services",
+        "sector": "General Services",
         "confidence": 0.3,
-        "reason": f"Unknown DealOpportunities sector(s): '{raw_sector}'",
+        "reason": f"Unmapped DO sector(s): '{raw_sector}'",
     }

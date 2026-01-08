@@ -262,6 +262,37 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
             title = extract_do_title(html) or r["title"]
             parsed = parse_do_detail(html)
 
+            turnover_raw = parsed["facts"].get("turnover")
+
+            conn.execute(
+                """
+                UPDATE deals
+                SET turnover_range_raw = COALESCE(turnover_range_raw, ?)
+                WHERE id = ?
+                """,
+                (turnover_raw, row_id),
+            )
+
+            mapped_revenue_k = map_turnover_range_to_revenue_k(turnover_raw)
+
+            if mapped_revenue_k is not None:
+                existing = conn.execute(
+                    "SELECT revenue_k FROM deals WHERE id = ?",
+                    (row_id,),
+                ).fetchone()["revenue_k"]
+
+                if existing is None:
+                    conn.execute(
+                        """
+                        UPDATE deals
+                        SET revenue_k           = ?,
+                            last_updated        = CURRENT_TIMESTAMP,
+                            last_updated_source = 'AUTO'
+                        WHERE id = ?
+                        """,
+                        (mapped_revenue_k, row_id),
+                    )
+
             # -------------------------------------------------
             # MAPPING (broker sector is authoritative)
             # -------------------------------------------------

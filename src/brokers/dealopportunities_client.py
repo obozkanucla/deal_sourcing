@@ -69,7 +69,7 @@ class DealOpportunitiesClient:
             elif "region" in label:
                 data["regions"] = value
             elif "turnover" in label:
-                data["turnover"] = value
+                data["turnover"] = value.replace("\xa0", " ").strip()
             elif "offers required" in label:
                 data["deadline"] = value
 
@@ -126,9 +126,11 @@ class DealOpportunitiesClient:
                     "source_listing_id": ref,
                     "source_url": title_el.get_attribute("href"),
                     "title": title_el.inner_text().strip(),
+
+                    # raw broker facts (LOSSLESS)
                     "sectors_multi": meta.get("sectors"),
                     "location": meta.get("regions"),
-                    "revenue": meta.get("turnover"),
+                    "turnover_range": meta.get('turnover'),
                     "deadline": meta.get("deadline"),
                 })
 

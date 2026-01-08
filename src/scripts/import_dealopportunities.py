@@ -7,7 +7,7 @@ from src.brokers.dealopportunities_client import DealOpportunitiesClient
 # ----------------------------------
 # DRY RUN CONFIG
 # ----------------------------------
-DRY_RUN = True
+DRY_RUN = False
 DRY_RUN_PAGES = 2
 DRY_RUN_PREVIEW_LIMIT = 50  # safety cap for printing
 
@@ -92,7 +92,6 @@ def main():
         f"✅ DealOpportunities import complete — "
         f"inserted={inserted}, refreshed={refreshed}"
     )
-
 
 if __name__ == "__main__":
     main()
