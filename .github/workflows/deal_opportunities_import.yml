@@ -61,12 +61,13 @@ jobs:
       - name: Debug pipeline env
         run: |
           echo "PIPELINE_ENV=$PIPELINE_ENV"
-#      # --------------------------------------------------
-#      # Playwright
-#      # --------------------------------------------------
-#      - name: Install Playwright browsers
-#        run: |
-#          python -m playwright install chromium --with-deps
+
+      # --------------------------------------------------
+      # Playwright
+      # --------------------------------------------------
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install chromium --with-deps
 
       # --------------------------------------------------
       # Restore canonical SQLite DB from GitHub Release

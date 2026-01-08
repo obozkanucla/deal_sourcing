@@ -101,6 +101,31 @@ def normalize_do_sector(raw_sector: str | None) -> str | None:
 
     return sector
 
+def map_turnover_range_to_revenue_k(raw: str | None) -> float | None:
+    """
+    DealOpportunities turnover bands → midpoint revenue_k (GBP).
+    Returns None if unknown / non-numeric.
+    """
+    if not raw:
+        return None
+
+    s = raw.lower().strip()
+
+    ranges = {
+        "under £500k": 250,
+        "£500k–£1m": 750,
+        "£1m–£2m": 1500,
+        "£2m–£5m": 3500,
+        "£5m–£10m": 7500,
+        "£10m+": 15000,
+    }
+
+    for k, v in ranges.items():
+        if k.replace("–", "-") in s or k in s:
+            return float(v)
+
+    return None
+
 def enrich_dealopportunities(limit: Optional[int] = None) -> None:
     print(f"📀 SQLite DB path: {DB_PATH}")
 
@@ -168,6 +193,33 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
             print(
                 f"\n📊 Progress: {completed}/{total} ({pct}%)"
             )
+
+            parsed = parse_do_detail(html)
+
+            # -------------------------------------------------
+            # TURNOVER → REVENUE INFERENCE (SAFE)
+            # -------------------------------------------------
+            turnover_raw = parsed["facts"].get("turnover")
+            mapped_revenue_k = map_turnover_range_to_revenue_k(turnover_raw)
+
+            if mapped_revenue_k is not None:
+                existing_rev = conn.execute(
+                    "SELECT revenue_k FROM deals WHERE id = ?",
+                    (row_id,),
+                ).fetchone()["revenue_k"]
+
+                if existing_rev is None:
+                    conn.execute(
+                        """
+                        UPDATE deals
+                        SET revenue_k           = ?,
+                            last_updated        = CURRENT_TIMESTAMP,
+                            last_updated_source = 'AUTO'
+                        WHERE id = ?
+                        """,
+                        (mapped_revenue_k, row_id),
+                    )
+
             conn.execute(
                 """
                 UPDATE deals
