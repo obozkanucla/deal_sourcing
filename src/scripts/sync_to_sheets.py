@@ -12,6 +12,7 @@ from pathlib import Path
 from src.domain.deal_columns import DEAL_COLUMNS
 from src.persistence.repository import SQLiteRepository
 from src.integrations.google_sheets import get_gspread_client
+from src.scripts.recalculate_financial_metrics import main as recalculate_financial_metrics
 from src.integrations.sheets_sync import (
     push_sqlite_to_sheets,
     pull_sheets_to_sqlite,
@@ -22,41 +23,14 @@ from src.integrations.sheets_sync import (
     reset_sheet_state,
     highlight_analyst_editable_columns,
     protect_system_columns,
-    clear_all_protections
+    clear_all_protections,
+    apply_dropdown_validations
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
 SPREADSHEET_ID_Production = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
 WORKSHEET_NAME = "Deals"
 SPREADSHEET_ID_Staging = "1Iioxt688xxw9fVbiixAMGrycwl22GqSh91p4EYsEAH0"
-DROPDOWNS = {
-    "status": [
-        "Pass",
-        "Initial Contact",
-        "CIM",
-        "CIM DD",
-        "1st Meeting (online)",
-        "2nd Meeting (in person)",
-         "Pre-LOI DD",
-        "LOI",
-        "On-Hold (UOffer)",
-        "Lost"],
-    "priority": [
-        "High",
-        "Medium",
-        "Low",
-    ],
-    "decision": [
-        "Pass",
-        "Advance",
-        "Hold",
-    ],
-    "owner": [
-        "Burak",
-        "Muge",
-        "Unassigned",
-    ],
-}
 
 import os
 
@@ -90,6 +64,8 @@ def main():
         columns=DEAL_COLUMNS
     )
 
+    recalculate_financial_metrics()
+
     # 2️⃣ Clean sheet
     reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
 
@@ -101,6 +77,7 @@ def main():
 
     # 4️⃣ Push new deals only
     push_sqlite_to_sheets(repo, ws)
+    apply_dropdown_validations(ws)  # ← HERE
 
     apply_sheet_formatting(ws)
     apply_base_sheet_formatting(ws)
@@ -116,7 +93,7 @@ def main():
             "industry",
             "sector",
             "location",
-            "profit_margin_pct",
+            "ebitda_margin",
             "revenue_growth_pct",
             "leverage_pct",
         ]

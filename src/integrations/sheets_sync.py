@@ -9,12 +9,12 @@ ALLOWED_COLUMNS = {c.name for c in DEAL_COLUMNS if c.push or c.pull}
 SYSTEM_FIELDS = {c.name for c in DEAL_COLUMNS if c.system}
 DROPDOWNS = {
     "status": [
-        "New",
-        "Reviewing",
+        "Pass",
+        "Initial Contact",
         "CIM",
-        "Parked",
-        "Passed",
-        "Lost",
+        "CIM DD",
+        "LOI",
+        "Lost"
     ],
     "priority": [
         "High",
@@ -23,16 +23,31 @@ DROPDOWNS = {
     ],
     "decision": [
         "Pass",
-        "Advance",
-        "Hold",
+        "Park",
+        "Progress",
     ],
     "owner": [
-        "Burak",
-        "Muge",
-        "Unassigned",
+        "AMO",
+        "MSE",
+        "OBO",
     ],
 }
 
+STATUS_RULES = {
+    "status": {
+        "Pass": {"red": 0.95, "green": 0.8, "blue": 0.8},
+        "Initial Contact": {"red": 0.85, "green": 0.9, "blue": 1.0},
+        "CIM": {"red": 0.8, "green": 0.95, "blue": 0.8},
+        "CIM DD": {"red": 0.75, "green": 0.9, "blue": 0.75},
+        "LOI": {"red": 0.7, "green": 0.9, "blue": 0.7},
+        "Lost": {"red": 0.9, "green": 0.6, "blue": 0.6},
+    },
+    "decision": {
+        "Pass": {"red": 0.95, "green": 0.8, "blue": 0.8},
+        "Progress": {"red": 0.8, "green": 0.95, "blue": 0.8},
+        "Park": {"red": 1.0, "green": 0.9, "blue": 0.6},
+    },
+}
 # -----------------------------
 # Helpers
 # -----------------------------
@@ -272,7 +287,7 @@ def update_folder_links(repo, ws):
 
     print(f"✅ Updated {updates} Drive Folder links")
 
-def backfill_system_columns(repo, ws, columns, batch_size=100):
+def backfill_system_columns(repo, ws, columns, batch_size=100, force=False):
     """
     Backfill system-derived columns (title, industry, sector, location)
     without overwriting existing sheet values.
@@ -310,13 +325,13 @@ def backfill_system_columns(repo, ws, columns, batch_size=100):
             col_idx = header_idx.get(col)
             if col_idx is None:
                 continue
-
-            # do not overwrite existing values
-            if col_idx < len(row) and row[col_idx].strip():
-                continue
+            if not force:
+                if col_idx < len(row) and row[col_idx].strip():
+                    if col not in ("ebitda_margin", "revenue_multiple", "ebitda_multiple"):
+                        continue
 
             val = deal.get(col)
-            if not val:
+            if val is None:
                 continue
 
             updates.append({
@@ -372,13 +387,12 @@ def header_to_col_idx(ws):
     headers = ws.row_values(1)
     return {h: i + 1 for i, h in enumerate(headers)}
 
-def apply_status_rules(ws, col_idx):
-    rules = {
-        "Pass":   {"red": 0.95, "green": 0.8,  "blue": 0.8},
-        "Progress":    {"red": 0.8,  "green": 0.95, "blue": 0.8},
-        "Park": {"red": 1.0,  "green": 0.9,  "blue": 0.6},
-    }
 
+def apply_status_format_rules(ws, col_name: str, col_idx: int):
+    if col_name not in STATUS_RULES:
+        return
+
+    rules = STATUS_RULES[col_name]
     requests = []
 
     for value, color in rules.items():
@@ -387,7 +401,7 @@ def apply_status_rules(ws, col_idx):
                 "rule": {
                     "ranges": [{
                         "sheetId": ws.id,
-                        "startRowIndex": 1,              # skip header
+                        "startRowIndex": 1,  # skip header
                         "startColumnIndex": col_idx - 1,
                         "endColumnIndex": col_idx,
                     }],
@@ -593,22 +607,12 @@ def apply_sheet_formatting(ws):
         # format_percentage_column(ws, col["ebitda_margin"])
         apply_ebitda_margin_color_scale(ws, col["ebitda_margin"])
 
-    # Workflow
-    for name in ("status", "decision"):
-        if name in col:
-            apply_status_rules(ws, col[name])
 
-    # Status column
-    if "status" in col:
-        apply_status_dropdown(ws, col["status"])
+    dropdown_cols = ["status", "decision", "owner"]
+    for name in dropdown_cols:
+        apply_dropdown_validations(ws)
+        apply_status_format_rules(ws, name, col[name])
 
-    # Decision column
-    if "decision" in col:
-        apply_decision_dropdown(ws, col["decision"])
-
-    # Owner column
-    if "owner" in col:
-        apply_owner_dropdown(ws, col["owner"])
 
     print("🎨 Sheet formatting applied")
 
@@ -702,22 +706,11 @@ def protect_system_columns(ws, allowed_editors=None):
 
     print(f"🔒 Protected {len(requests)} system columns")
 
-def apply_status_dropdown(ws, col_idx: int):
+def apply_dropdown(ws, col_name: str, col_idx: int, values: list[str]):
     """
-    Apply a strict dropdown to the Status column.
+    Apply a strict dropdown validation to a column.
     col_idx is 1-based.
     """
-    STATUS_DROPDOWN = [
-        "Initial Contact",
-        "CIM",
-        "1st Meeting",
-        "2nd Meeting",
-        "Pre-LOI DD",
-        "LOI",
-        "On Hold",
-        "Pass",
-        "Lost",
-    ]
     requests = [
         {
             "setDataValidation": {
@@ -731,8 +724,7 @@ def apply_status_dropdown(ws, col_idx: int):
                     "condition": {
                         "type": "ONE_OF_LIST",
                         "values": [
-                            {"userEnteredValue": v}
-                            for v in STATUS_DROPDOWN
+                            {"userEnteredValue": v} for v in values
                         ],
                     },
                     "strict": True,
@@ -743,81 +735,21 @@ def apply_status_dropdown(ws, col_idx: int):
     ]
 
     ws.spreadsheet.batch_update({"requests": requests})
-    print("🔽 Status dropdown applied")
+    print(f"🔽 {col_name} dropdown applied")
 
-def apply_decision_dropdown(ws, col_idx: int):
-    """
-    Apply a strict dropdown to the Status column.
-    col_idx is 1-based.
-    """
-    DECISION_DROPDOWN = [
-        "Pass",
-        "Park",
-        "Progress",
-    ]
-    requests = [
-        {
-            "setDataValidation": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": 1,              # skip header
-                    "startColumnIndex": col_idx - 1,
-                    "endColumnIndex": col_idx,
-                },
-                "rule": {
-                    "condition": {
-                        "type": "ONE_OF_LIST",
-                        "values": [
-                            {"userEnteredValue": v}
-                            for v in DECISION_DROPDOWN
-                        ],
-                    },
-                    "strict": True,
-                    "showCustomUi": True,
-                },
-            }
-        }
-    ]
+def apply_dropdown_validations(ws):
+    col_map = header_to_col_idx(ws)
 
-    ws.spreadsheet.batch_update({"requests": requests})
-    print("🔽 Decision dropdown applied")
+    for col_name, values in DROPDOWNS.items():
+        if col_name not in col_map:
+            continue
 
-def apply_owner_dropdown(ws, col_idx: int):
-    """
-    Apply a strict dropdown to the Status column.
-    col_idx is 1-based.
-    """
-    OWNER_DROPDOWN = [
-        "AMO",
-        "MSE",
-        "OBO",
-    ]
-    requests = [
-        {
-            "setDataValidation": {
-                "range": {
-                    "sheetId": ws.id,
-                    "startRowIndex": 1,              # skip header
-                    "startColumnIndex": col_idx - 1,
-                    "endColumnIndex": col_idx,
-                },
-                "rule": {
-                    "condition": {
-                        "type": "ONE_OF_LIST",
-                        "values": [
-                            {"userEnteredValue": v}
-                            for v in OWNER_DROPDOWN
-                        ],
-                    },
-                    "strict": True,
-                    "showCustomUi": True,
-                },
-            }
-        }
-    ]
-
-    ws.spreadsheet.batch_update({"requests": requests})
-    print("🔽 Owner dropdown applied")
+        apply_dropdown(
+            ws=ws,
+            col_name=col_name,
+            col_idx=col_map[col_name],
+            values=values,
+        )
 
 def clear_all_protections(ws):
     """
