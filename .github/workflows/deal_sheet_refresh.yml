@@ -82,9 +82,11 @@ jobs:
             --clobber || echo "No existing DB found — starting fresh"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Import legacy deals
-        run: python -m src.scripts.reset_legacy_deals
+#      # --------------------------------------------------
+#      # Phase 0.0 — Reset Legacy Deals & Reimport
+#      # --------------------------------------------------
+#      - name: Import legacy deals
+#        run: python -m src.scripts.reset_legacy_deals
 
 #      # --------------------------------------------------
 #      # Phase 0 — Legacy imports
