@@ -71,20 +71,17 @@ jobs:
 #          python -m playwright install chromium --with-deps
 
       # --------------------------------------------------
-      # Restore canonical SQLite DB from GitHub Releaseq
+      # Restore canonical SQLite DB from GitHub Release
       # --------------------------------------------------
-      - name: Download db-latest SQLite
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: db-latest
-          files: deals.sqlite
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Move DB into place
+      - name: Download latest SQLite DB from release (if exists)
         run: |
           mkdir -p db
-          mv deals.sqlite db/deals.sqlite
+          gh release download db-latest \
+            --pattern deals.sqlite \
+            --output db/deals.sqlite \
+            --clobber || echo "No existing DB found — starting fresh"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 #      # --------------------------------------------------
 #      # Phase 0 — Legacy imports
