@@ -128,7 +128,7 @@ def ensure_sheet_headers(ws, columns):
     ws.clear()
 
     # Resize to exactly 1 row and N columns
-    ws.resize(rows=1, cols=len(expected))
+    ws.resize(rows=2, cols=len(expected))
 
     # Write headers
     ws.update("A1", [expected])
