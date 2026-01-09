@@ -1,6 +1,5 @@
 PRAGMA table_info(deals);
 
-
 SELECT
     source_listing_id,
     title,
@@ -78,4 +77,45 @@ CREATE TABLE deals_v2 (
     drive_folder_url TEXT,
 
     UNIQUE (source, source_listing_id)
+);
+
+WITH effective_state AS (
+    SELECT
+        source,
+        industry,
+        CASE
+            WHEN status IS NULL
+                 AND julianday('now') - julianday(first_seen) > 7
+                THEN 'not_decided'
+            WHEN status IS NULL
+                THEN 'new'
+            ELSE LOWER(REPLACE(status, ' ', '_'))
+        END AS state
+    FROM deals
+)
+INSERT INTO weekly_pipeline_snapshots
+SELECT
+    DATE('now') AS snapshot_date,
+    industry,
+    state,
+    source,
+    COUNT(*) AS deal_count
+FROM effective_state
+GROUP BY industry, state, source;
+
+CREATE TABLE pipeline_snapshots (
+    snapshot_year      INTEGER NOT NULL,
+    snapshot_week      INTEGER NOT NULL,
+    snapshot_key       TEXT    NOT NULL,   -- e.g. "2026-W02"
+
+    industry           TEXT    NOT NULL,
+    status              TEXT    NOT NULL,
+    source             TEXT    NOT NULL,
+
+    deal_count         INTEGER NOT NULL,
+
+    snapshot_run_date  DATE    NOT NULL,
+    created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY (snapshot_key, industry, status, source)
 );

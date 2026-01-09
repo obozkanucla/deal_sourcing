@@ -54,7 +54,6 @@ class DealOpportunitiesClient:
         time.sleep(self.BASE_SLEEP + random.random() * self.JITTER)
 
 
-
     def _extract_dl_map(self, li):
         data = {}
 

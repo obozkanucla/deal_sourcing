@@ -153,7 +153,7 @@ def enrich_dealopportunities(limit: Optional[int] = None) -> None:
                 print("🔄 Restarting DealOpportunities browser")
                 client.stop()
                 client.start()
-                client._human_sleep()
+                # client._human_sleep()
 
             try:
                 html = client.fetch_listing_detail_and_pdf(
