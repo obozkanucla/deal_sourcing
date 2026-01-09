@@ -25,6 +25,23 @@ DRY_RUN = False
 # HELPERS
 # -------------------------------------------------
 
+def normalize_description(desc: str | None) -> str:
+    if not desc:
+        return ""
+    return " ".join(
+        desc.lower()
+            .replace("\xa0", " ")
+            .replace("\n", " ")
+            .replace("\r", " ")
+            .split()
+    )
+
+def hash_description(desc: str | None) -> str | None:
+    norm_desc = normalize_description(desc)
+    if not norm_desc:
+        return None
+    return hashlib.sha256(norm_desc.encode("utf-8")).hexdigest()
+
 def norm(x):
     return str(x or "").strip().lower()
 
@@ -81,6 +98,33 @@ def fingerprint(sector_raw, location, revenue_k, ebitda_k):
     ])
     return hashlib.sha1(key.encode("utf-8")).hexdigest()
 
+def parse_k_number(val):
+    """
+    Normalize numeric inputs from external sources.
+    Returns float or None.
+    """
+    if val is None:
+        return None
+
+    if isinstance(val, (int, float)):
+        return float(val)
+
+    if not isinstance(val, str):
+        return None
+
+    v = (
+        val.replace("£", "")
+           .replace(",", "")
+           .strip()
+    )
+
+    if v == "":
+        return None
+
+    try:
+        return float(v)
+    except ValueError:
+        return None
 
 # -------------------------------------------------
 # MAIN
@@ -117,16 +161,19 @@ def main():
             revenue_k = round(revenue_raw / 1000, 1) if revenue_raw is not None else None
             ebitda_k = round(ebitda_raw / 1000, 1) if ebitda_raw is not None else None
 
-            source_listing_id = fingerprint(
-                sector_raw=sector_raw,
-                location=location,
-                revenue_k=revenue_k,
-                ebitda_k=ebitda_k,
-            )
+            # IMPORTANT:
+            # Dmitry deals use description_hash as identity.
+            # Do NOT change this without a full delete + reimport.
+            source_listing_id = hash_description(description)
 
             decision = map_interest_flag_to_decision(interest_flag)
 
             deal = {
+
+                "description": description,
+                "description_hash": hash_description(description),
+                "description_len": len(description) if description else None,
+
                 # -------------------------
                 # Identity
                 # -------------------------
@@ -185,6 +232,27 @@ def main():
                 source="Dmitry",
                 source_listing_id=source_listing_id,
             )
+
+            desc_hash = deal["description_hash"]
+
+            if desc_hash:
+                dup = repo.fetch_all(
+                    """
+                    SELECT source_listing_id
+                    FROM deals
+                    WHERE source = 'Dmitry'
+                      AND description_hash = ?
+                      AND source_listing_id != ?
+                    LIMIT 1
+                    """,
+                    (desc_hash, source_listing_id),
+                )
+
+                if dup:
+                    deal["notes"] = (
+                            (deal.get("notes") or "")
+                            + f"\n⚠ Possible duplicate of {dup['source_listing_id']} (desc hash match)"
+                    )
 
             repo.upsert_deal_v2(deal)
 

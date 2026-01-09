@@ -64,6 +64,7 @@ def main():
     sh = gc.open_by_key(SPREADSHEET_ID)
     ws = sh.worksheet(WORKSHEET_NAME)
 
+
     # 1️⃣ PULL analyst edits FIRST
     pull_sheets_to_sqlite(
         repo,

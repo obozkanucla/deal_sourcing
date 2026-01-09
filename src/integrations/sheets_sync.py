@@ -40,6 +40,11 @@ DROPDOWNS = {
         "Geography"
     ]
 }
+NUMERIC_FIELDS = {
+    "revenue_k",
+    "ebitda_k",
+    "asking_price_k",
+}
 
 STATUS_RULES = {
     "status": {
@@ -191,6 +196,7 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
 
     for row in rows:
         # deal_uid is mandatory
+
         if "deal_uid" not in col_idx:
             continue
 
