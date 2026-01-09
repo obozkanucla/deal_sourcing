@@ -148,7 +148,7 @@ jobs:
       # Phase 4 — Sync outputs
       # --------------------------------------------------
       - name: Pipeline reporting to Slack
-        run: python -m src.scripts.snapshot_weekly_orchestrator
+        run: python -m src.scripts.snapshot_weekly_orchestrator(force_current_week=True)
 
       # --------------------------------------------------
       # Persist canonical SQLite snapshot
