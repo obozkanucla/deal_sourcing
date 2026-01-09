@@ -75,8 +75,18 @@ def parse_do_detail(html: str) -> dict:
 
 def extract_do_title(html: str) -> str | None:
     soup = BeautifulSoup(html, "html.parser")
-    h1 = soup.select_one("h1")
-    return h1.get_text(strip=True) if h1 else None
+
+    # strict selector — real DO titles only
+    h1_link = soup.select_one("h1 > a[href*='/opportunity/']")
+    if h1_link:
+        return h1_link.get_text(strip=True)
+
+    # fallback: known class
+    h1 = soup.select_one("h1.opportunity-title")
+    if h1:
+        return h1.get_text(strip=True)
+
+    return None
 
 
 # =========================================================
