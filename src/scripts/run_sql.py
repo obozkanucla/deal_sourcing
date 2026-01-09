@@ -30,7 +30,8 @@ with repo.get_conn() as conn:
             'S12257','S12261','S12267','S12268','S12272','S12275',
             'S12279','S12282','S12285','S12287','S12288','S12291',
             'S12300','S12313','S12315','S12316','S12319','S12320'
-  """)
+            )
+                 """)
     # conn.execute(
     #     """
     #     CREATE TABLE IF NOT EXISTS pipeline_snapshots (
