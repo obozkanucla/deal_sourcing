@@ -26,7 +26,8 @@ from src.integrations.sheets_sync import (
     clear_all_protections,
     apply_dropdown_validations,
     clear_sheet_filter,
-    apply_filter_to_used_range
+    apply_filter_to_used_range,
+    apply_pass_reason_required_formatting
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
@@ -89,6 +90,7 @@ def main():
     apply_base_sheet_formatting(ws)
     clear_sheet_filter(ws)
     apply_filter_to_used_range(ws, num_rows, num_cols)
+    apply_pass_reason_required_formatting(ws)
 
     # 5️⃣ Enrichment / backfills
     update_folder_links(repo, ws)

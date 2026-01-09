@@ -625,6 +625,57 @@ def apply_sheet_formatting(ws):
 
     print("🎨 Sheet formatting applied")
 
+def apply_pass_reason_required_formatting(ws):
+    """
+    Highlight rows where:
+    - status == 'pass'
+    - pass_reason is blank
+    """
+    spreadsheet = ws.spreadsheet
+    sheet_id = ws.id
+
+    # We rely on header names, not column letters
+    requests = [
+        {
+            "addConditionalFormatRule": {
+                "rule": {
+                    "ranges": [
+                        {
+                            "sheetId": sheet_id,
+                            "startRowIndex": 1  # skip header
+                        }
+                    ],
+                    "booleanRule": {
+                        "condition": {
+                            "type": "CUSTOM_FORMULA",
+                            "values": [
+                                {
+                                    "userEnteredValue": (
+                                        '=AND($Status="pass", ISBLANK($Pass_reason))'
+                                    )
+                                }
+                            ]
+                        },
+                        "format": {
+                            "backgroundColor": {
+                                "red": 1.0,
+                                "green": 0.85,
+                                "blue": 0.85
+                            },
+                            "textFormat": {
+                                "bold": True
+                            }
+                        }
+                    }
+                },
+                "index": 0
+            }
+        }
+    ]
+
+    spreadsheet.batch_update({"requests": requests})
+    print("🚦 Pass reason requirement formatting applied")
+
 def apply_base_sheet_formatting(ws):
     freeze_header_row(ws)
     format_header_row(ws)
