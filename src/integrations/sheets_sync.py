@@ -630,11 +630,35 @@ def apply_pass_reason_required_formatting(ws):
     Highlight rows where:
     - status == 'pass'
     - pass_reason is blank
+
+    Uses column letters (API-safe), resolved dynamically from headers.
     """
     spreadsheet = ws.spreadsheet
     sheet_id = ws.id
 
-    # We rely on header names, not column letters
+    # Read header row
+    headers = ws.row_values(1)
+    header_map = {h: idx + 1 for idx, h in enumerate(headers)}
+
+    if "status" not in header_map or "pass_reason" not in header_map:
+        print("⚠️ status or pass_reason column missing — skipping formatting")
+        return
+
+    def col_letter(n: int) -> str:
+        """1 -> A, 27 -> AA"""
+        s = ""
+        while n:
+            n, r = divmod(n - 1, 26)
+            s = chr(65 + r) + s
+        return s
+
+    status_col = col_letter(header_map["status"])
+    reason_col = col_letter(header_map["pass_reason"])
+
+    formula = (
+        f'=AND(${status_col}2="pass", ISBLANK(${reason_col}2))'
+    )
+
     requests = [
         {
             "addConditionalFormatRule": {
@@ -649,11 +673,7 @@ def apply_pass_reason_required_formatting(ws):
                         "condition": {
                             "type": "CUSTOM_FORMULA",
                             "values": [
-                                {
-                                    "userEnteredValue": (
-                                        '=AND($Status="pass", ISBLANK($Pass_reason))'
-                                    )
-                                }
+                                {"userEnteredValue": formula}
                             ]
                         },
                         "format": {
