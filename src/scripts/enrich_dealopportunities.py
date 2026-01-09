@@ -109,15 +109,22 @@ def enrich_dealopportunities():
     # 🔧 ONE-TIME REPAIR: ALL DO DEALS
     rows = conn.execute(
         """
-        SELECT
-            id,
-            source_listing_id,
-            source_url,
-            title,
-            sector_raw
-        FROM deals
-        WHERE source = 'DealOpportunities'
-        ORDER BY last_seen DESC
+            SELECT
+                id,
+                source_listing_id,
+                source_url,
+                title,
+                sector_raw
+            FROM deals
+            WHERE source = 'DealOpportunities'
+              AND (
+                    industry IS NULL
+                 OR industry = 'Other'
+                 OR title IS NULL
+                 OR description IS NULL
+                 OR location_raw IS NULL
+              )
+            ORDER BY last_seen DESC
         """
     ).fetchall()
 
