@@ -371,7 +371,7 @@ def backfill_system_columns(repo, ws, columns, batch_size=100, force=False):
 
     # Flush remaining updates
     if updates:
-        ws.batch_update(updates)
+        sheets_write_with_backoff(lambda: ws.batch_update(updates))
 
     print("✅ System column backfill complete")
 
