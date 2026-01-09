@@ -363,7 +363,7 @@ def backfill_system_columns(repo, ws, columns, batch_size=100, force=False):
                 "values": [[val]],
             })
 
-        # Flush in batches
+        # Flush in batches #
         if len(updates) >= batch_size:
             sheets_write_with_backoff(lambda: ws.batch_update(updates))
             updates.clear()
