@@ -25,7 +25,8 @@ DEAL_COLUMNS = [
 
     # --- Financials (truth from legacy / brokers) ---
     ColumnSpec("revenue_k", push=True, pull=False),
-     ColumnSpec("asking_price_k", push=True, pull=False),
+    ColumnSpec("ebitda_k", push=True, pull=True),
+    ColumnSpec("asking_price_k", push=True, pull=False),
     ColumnSpec("profit_margin_pct", push=True, pull=False),
     ColumnSpec("revenue_growth_pct", push=True, pull=False),
     ColumnSpec("leverage_pct", push=True, pull=False),
