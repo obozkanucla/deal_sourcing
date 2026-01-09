@@ -119,3 +119,21 @@ CREATE TABLE pipeline_snapshots (
 
     PRIMARY KEY (snapshot_key, industry, status, source)
 );
+
+
+
+-- snapshot completeness
+SELECT
+  snapshot_key,
+  SUM(deal_count) AS total_snapshot_deals
+FROM pipeline_snapshots
+GROUP BY snapshot_key;
+
+-- industry coverage
+SELECT
+  snapshot_key,
+  industry,
+  SUM(deal_count)
+FROM pipeline_snapshots
+GROUP BY snapshot_key, industry
+ORDER BY snapshot_key, industry;

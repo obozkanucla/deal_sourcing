@@ -31,6 +31,14 @@ DROPDOWNS = {
         "MSE",
         "OBO",
     ],
+    "pass_reason":[
+        "Size",
+        "Sector",
+        "Fundamentals",
+        "Process",
+        "Valuation",
+        "Geography"
+    ]
 }
 
 STATUS_RULES = {
@@ -744,7 +752,6 @@ def apply_dropdown_validations(ws):
     for col_name, values in DROPDOWNS.items():
         if col_name not in col_map:
             continue
-
         apply_dropdown(
             ws=ws,
             col_name=col_name,
@@ -782,7 +789,6 @@ def clear_all_protections(ws):
         print(f"🧹 Cleared {len(requests)} existing protections")
     else:
         print("🧹 No existing protections found")
-
 
 def clear_sheet_filter(ws):
     """

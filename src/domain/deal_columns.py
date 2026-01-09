@@ -42,6 +42,7 @@ DEAL_COLUMNS = [
     ColumnSpec("priority", push=True, pull=True),
     ColumnSpec("notes", push=True, pull=True),  # ← Legacy “Update”
     ColumnSpec("last_updated_source", push=True, pull=False),
+    ColumnSpec("pass_reason", push=True, pull=True),
 
     # --- Decisioning ---
     ColumnSpec("decision", push=True, pull=True),          # ← Legacy “Outcome”
