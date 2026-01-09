@@ -1,4 +1,4 @@
-name: Deal Sourcing Pipeline
+name: Deal Pipeline Reporting
 
 on:
   schedule:
