@@ -26,7 +26,7 @@ DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/do_pdfs")
 PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
-MAX_RUNTIME = 5 * 60          # GitHub-safe
+MAX_RUNTIME = 2 * 60          # GitHub-safe
 BROWSER_RESET_EVERY = 25
 
 HUMAN_SLEEP_BASE = 4
