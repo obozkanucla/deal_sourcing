@@ -24,7 +24,6 @@ def snapshot_exists(conn, snapshot_key: str) -> bool:
         (snapshot_key,)
     ).fetchone() is not None
 
-
 def snapshot_pipeline_run(force_current_week=False):
     iso_year, iso_week, snapshot_key = get_snapshot_week(RUN_DATE)
 
