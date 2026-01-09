@@ -24,7 +24,9 @@ from src.integrations.sheets_sync import (
     highlight_analyst_editable_columns,
     protect_system_columns,
     clear_all_protections,
-    apply_dropdown_validations
+    apply_dropdown_validations,
+    clear_sheet_filter,
+    apply_filter_to_used_range
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
@@ -76,11 +78,17 @@ def main():
     ensure_sheet_headers(ws, DEAL_COLUMNS)
 
     # 4️⃣ Push new deals only
-    push_sqlite_to_sheets(repo, ws)
+    rows_written = push_sqlite_to_sheets(repo, ws)
     apply_dropdown_validations(ws)  # ← HERE
+
+    # ✅ NOW we know dimensions
+    num_rows = rows_written + 1
+    num_cols = len(DEAL_COLUMNS)
 
     apply_sheet_formatting(ws)
     apply_base_sheet_formatting(ws)
+    clear_sheet_filter(ws)
+    apply_filter_to_used_range(ws, num_rows, num_cols)
 
     # 5️⃣ Enrichment / backfills
     update_folder_links(repo, ws)

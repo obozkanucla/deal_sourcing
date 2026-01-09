@@ -129,6 +129,7 @@ def push_sqlite_to_sheets(repo, ws):
 
     if rows:
         append_rows(ws, rows)
+    return len(rows)
 
 # -----------------------------
 # PULL: Sheets → SQLite
@@ -781,3 +782,55 @@ def clear_all_protections(ws):
         print(f"🧹 Cleared {len(requests)} existing protections")
     else:
         print("🧹 No existing protections found")
+
+
+def clear_sheet_filter(ws):
+    """
+    Clears filters and protections.
+    Safe to run repeatedly.
+    """
+    spreadsheet = ws.spreadsheet
+    sheet_id = ws.id
+
+    meta = spreadsheet.fetch_sheet_metadata()
+    requests = []
+
+    for sheet in meta["sheets"]:
+        if sheet["properties"]["sheetId"] != sheet_id:
+            continue
+
+        # 1️⃣ Clear basic filter if present
+        if "basicFilter" in sheet:
+            requests.append({
+                "clearBasicFilter": {
+                    "sheetId": sheet_id
+                }
+            })
+
+    if requests:
+        spreadsheet.batch_update({"requests": requests})
+        print(f"🧹 Cleared {len(requests)} sheet  filters")
+    else:
+        print("🧹 Sheet already clean")
+
+def apply_filter_to_used_range(ws, num_rows, num_cols):
+    spreadsheet = ws.spreadsheet
+    sheet_id = ws.id
+
+    spreadsheet.batch_update({
+        "requests": [{
+            "setBasicFilter": {
+                "filter": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 0,
+                        "endRowIndex": num_rows,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": num_cols,
+                    }
+                }
+            }
+        }]
+    })
+
+    print("🔎 Filter reapplied to full data range")
