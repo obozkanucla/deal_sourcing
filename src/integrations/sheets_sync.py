@@ -104,6 +104,22 @@ def append_rows(ws, rows, chunk_size=200):
 # -----------------------------
 # Helpers
 # -----------------------------
+import time
+import random
+from gspread.exceptions import APIError
+
+def sheets_write_with_backoff(fn, *, max_retries=5):
+    for attempt in range(max_retries):
+        try:
+            return fn()
+        except APIError as e:
+            if "Quota exceeded" not in str(e):
+                raise
+            sleep = 2 ** attempt + random.random()
+            print(f"⏳ Sheets quota hit — retrying in {sleep:.1f}s")
+            time.sleep(sleep)
+    raise RuntimeError("Sheets quota exceeded after retries")
+
 
 def ensure_sheet_headers(ws, columns):
     expected = [c.name for c in columns]
@@ -349,7 +365,7 @@ def backfill_system_columns(repo, ws, columns, batch_size=100, force=False):
 
         # Flush in batches
         if len(updates) >= batch_size:
-            ws.batch_update(updates)
+            sheets_write_with_backoff(lambda: ws.batch_update(updates))
             updates.clear()
             time.sleep(1)  # stay well under quota
 
