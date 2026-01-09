@@ -218,6 +218,7 @@ def enrich_dealopportunities():
                         title = ?,
                         description = ?,
                         location_raw = ?,
+                        location = COALESCE(location, ?),
                         industry = ?,
                         sector = ?,
                         content_hash = ?,
@@ -233,6 +234,7 @@ def enrich_dealopportunities():
                     (
                         title,
                         description,
+                        location_raw,
                         location_raw,
                         industry,
                         sector,
