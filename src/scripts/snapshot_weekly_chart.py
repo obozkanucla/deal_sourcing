@@ -3,8 +3,14 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
+# -------------------------------------------------
+# CONFIG
+# -------------------------------------------------
+
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
-SNAPSHOT_KEY = "2026-W02"   # or compute dynamically
+OUTPUT_DIR = Path("/tmp")
+OUTPUT_DIR.mkdir(exist_ok=True)
+
 INDUSTRY_ORDER = [
     "Healthcare",
     "Business_Services",
@@ -35,23 +41,61 @@ PIPELINE_STATUS_ORDER = [
     "lost",
 ]
 
-import sqlite3
-import pandas as pd
-import matplotlib.pyplot as plt
-from pathlib import Path
+# -------------------------------------------------
+# STATUS NORMALIZATION (CRITICAL)
+# -------------------------------------------------
 
-DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
-OUTPUT_DIR = Path("/tmp")
-OUTPUT_DIR.mkdir(exist_ok=True)
-import matplotlib
-import sys
+PIPELINE_STATUS_CANONICAL = {
+    None: "not_yet_analysed",
 
-def plot_latest_pipeline_snapshot(show=False):
+    "new": "new",
+
+    "initial contact": "initial_contact",
+    "Initial Contact": "initial_contact",
+
+    "cim": "cim",
+    "CIM": "cim",
+
+    "cim dd": "cim_dd",
+    "CIM DD": "cim_dd",
+
+    "1st meeting (online)": "1st_meeting_(online)",
+    "1st meeting (in person)": "1st_meeting_(in_person)",
+
+    "2nd meeting (online)": "2nd_meeting_(online)",
+    "2nd meeting (in person)": "2nd_meeting_(in_person)",
+
+    "loi": "loi",
+    "LOI": "loi",
+
+    "pass": "pass",
+    "Pass": "pass",
+
+    "lost": "lost",
+    "Lost": "lost",
+}
+
+
+def normalize_status(raw):
+    if raw is None:
+        return "not_yet_analysed"
+    return PIPELINE_STATUS_CANONICAL.get(raw, raw.strip().lower())
+
+
+# -------------------------------------------------
+# MAIN PLOT FUNCTION
+# -------------------------------------------------
+
+def plot_latest_pipeline_snapshot():
     conn = sqlite3.connect(DB_PATH)
 
     snapshot = pd.read_sql(
         """
-        SELECT *
+        SELECT
+            snapshot_key,
+            COALESCE(industry, 'NA') AS industry,
+            status,
+            deal_count
         FROM pipeline_snapshots
         WHERE snapshot_key = (
             SELECT MAX(snapshot_key) FROM pipeline_snapshots
@@ -66,6 +110,14 @@ def plot_latest_pipeline_snapshot(show=False):
 
     snapshot_key = snapshot["snapshot_key"].iloc[0]
 
+    # -----------------------------
+    # Normalize status
+    # -----------------------------
+    snapshot["status"] = snapshot["status"].apply(normalize_status)
+
+    # -----------------------------
+    # Enforce industry ordering
+    # -----------------------------
     snapshot["industry"] = pd.Categorical(
         snapshot["industry"],
         categories=INDUSTRY_ORDER,
@@ -74,16 +126,30 @@ def plot_latest_pipeline_snapshot(show=False):
 
     snapshot = snapshot.sort_values("industry")
 
+    # -----------------------------
+    # Pivot
+    # -----------------------------
     pivot = snapshot.pivot_table(
         index="industry",
         columns="status",
         values="deal_count",
         aggfunc="sum",
         fill_value=0,
+        observed=False,
     )
 
-    # ---- EXPLICIT FIGURE + AXIS ----
-    fig, ax = plt.subplots(figsize=(16, 7))
+    # -----------------------------
+    # Enforce status order (THIS FIXES DATA LOSS)
+    # -----------------------------
+    pivot = pivot.reindex(
+        columns=[s for s in PIPELINE_STATUS_ORDER if s in pivot.columns],
+        fill_value=0,
+    )
+
+    # -----------------------------
+    # Plot
+    # -----------------------------
+    fig, ax = plt.subplots(figsize=(18, 8))
 
     pivot.plot(
         kind="bar",
@@ -91,29 +157,43 @@ def plot_latest_pipeline_snapshot(show=False):
         ax=ax,
     )
 
-    ax.set_title(f"Pipeline Snapshot — {snapshot_key}")
+    ax.set_title(f"Pipeline Snapshot — {snapshot_key}", fontsize=14)
     ax.set_xlabel("Industry")
     ax.set_ylabel("Deals")
     ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha="right")
 
+    # -----------------------------
+    # Legend ordering (EXPLICIT)
+    # -----------------------------
+    handles, labels = ax.get_legend_handles_labels()
+    label_to_handle = dict(zip(labels, handles))
+
+    ordered_labels = [
+        s for s in PIPELINE_STATUS_ORDER if s in label_to_handle
+    ]
+
     ax.legend(
+        [label_to_handle[l] for l in ordered_labels],
+        ordered_labels,
         title="Status",
         bbox_to_anchor=(1.02, 1),
         loc="upper left",
         frameon=False,
     )
 
+    plt.tight_layout()
+
     output_path = OUTPUT_DIR / f"pipeline_snapshot_{snapshot_key}.png"
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close()
 
-    # ---- ONLY SHOW IF INTERACTIVE ----
-    if show and matplotlib.get_backend().lower() != "agg":
-        plt.show()
-
-    plt.close(fig)
-    print(snapshot_key)
     return snapshot_key, output_path
 
+
+# -------------------------------------------------
+# ENTRYPOINT (FOR LOCAL TESTING)
+# -------------------------------------------------
+
 if __name__ == "__main__":
-    plot_latest_pipeline_snapshot(show=True)
+    key, path = plot_latest_pipeline_snapshot()
+    print(f"✅ Chart generated: {path}")
