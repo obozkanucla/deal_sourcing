@@ -59,7 +59,6 @@ def parse_money(val):
     except Exception:
         return None
 
-
 def parse_pct(val):
     try:
         return float(str(val).replace("%", "").strip())
@@ -143,24 +142,61 @@ def main():
     for sheet_name, sheet_date in SHEETS.items():
         ws = sh.worksheet(sheet_name)
         values = ws.get_all_values()
-        rows = values[1:]  # skip header
+
+        headers = values[0]
+        rows = values[1:]
+
+        # Header → index mapping (case-insensitive)
+        idx = {h.strip().lower(): i for i, h in enumerate(headers)}
+        REQUIRED_HEADERS = {
+            "description",
+            "region",
+            "revenue - clean",
+            "ebitda - clean",
+        }
+
+        missing = REQUIRED_HEADERS - idx.keys()
+        if missing:
+            raise RuntimeError(f"Dmitry sheet missing columns: {missing}")
 
         for row in rows:
-            if len(row) < 4:
+            if len(row) < 3:
                 continue
 
-            sector_raw = row[0]
-            location = row[1]
-            description = row[2]
+            sector_raw = row[idx["sector"]] if "sector" in idx else None
+            location = row[idx["region"]] if "region" in idx else None
+            description = row[idx["description"]] if "description" in idx else None
 
-            revenue_raw = parse_money(row[5]) if len(row) > 5 else None
-            ebitda_raw = parse_money(row[6]) if len(row) > 6 else None
-            ebitda_margin = parse_pct(row[7]) if len(row) > 7 else None
-            interest_flag = row[8] if len(row) > 8 else None
+            # ✅ USE CLEAN NUMERIC COLUMNS ONLY
+            revenue_raw = (
+                parse_money(row[idx["revenue - clean"]])
+                if "revenue - clean" in idx and idx["revenue - clean"] < len(row)
+                else None
+            )
+
+            ebitda_raw = (
+                parse_money(row[idx["ebitda - clean"]])
+                if "ebitda - clean" in idx and idx["ebitda - clean"] < len(row)
+                else None
+            )
+
+            # ✅ DERIVE EBITDA MARGIN (ignore sheet % column)
+            ebitda_margin = (
+                round((ebitda_raw / revenue_raw) * 100, 2)
+                if revenue_raw and ebitda_raw
+                else None
+            )
+
+            interest_flag = (
+                row[idx["interest"]]
+                if "interest" in idx and idx["interest"] < len(row)
+                else None
+            )
 
             revenue_k = round(revenue_raw / 1000, 1) if revenue_raw is not None else None
             ebitda_k = round(ebitda_raw / 1000, 1) if ebitda_raw is not None else None
 
+            # 🔑 DESCRIPTION HASH = IDENTITY
             # IMPORTANT:
             # Dmitry deals use description_hash as identity.
             # Do NOT change this without a full delete + reimport.
