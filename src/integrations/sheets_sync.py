@@ -528,20 +528,12 @@ def clear_all_conditional_formatting(ws):
         spreadsheet.batch_update({"requests": requests})
 
 def reset_sheet_state(ws, num_columns: int):
-    """
-    Hard reset a sheet:
-    - unfreeze rows/columns
-    - clear values
-    - remove all formatting
-    - remove conditional formatting rules
-    - reset column widths
-    """
-
     sheet_id = ws.id
+    spreadsheet = ws.spreadsheet
 
-    requests = [
-        # 1️⃣ Unfreeze everything
-        {
+    # 1️⃣ Unfreeze
+    spreadsheet.batch_update({
+        "requests": [{
             "updateSheetProperties": {
                 "properties": {
                     "sheetId": sheet_id,
@@ -552,41 +544,18 @@ def reset_sheet_state(ws, num_columns: int):
                 },
                 "fields": "gridProperties.frozenRowCount,gridProperties.frozenColumnCount",
             }
-        },
+        }]
+    })
 
-        # 2️⃣ Clear all formatting (backgrounds, number formats, text styles)
-        {
-            "repeatCell": {
-                "range": {
-                    "sheetId": sheet_id,
-                },
-                "cell": {
-                    "userEnteredFormat": {},
-                },
-                "fields": "userEnteredFormat",
-            }
-        },
+    time.sleep(0.5)  # allow Sheets to settle
 
-        # 3️⃣ Remove ALL conditional formatting rules
-        {
-            "deleteConditionalFormatRule": {
-                "sheetId": sheet_id,
-                "index": 0,
-            }
-        },
-    ]
-
-    # ⚠️ Conditional rules must be deleted one-by-one.
-    # We don’t know how many exist, so we loop defensively.
-    clear_all_conditional_formatting(ws)
-
-    # 4️⃣ Clear values last (after formatting reset)
+    # 2️⃣ Clear values
     ws.clear()
 
-    # 5️⃣ Reset column widths (Google default ≈ 100px)
+    # 3️⃣ Resize safely
     ws.resize(rows=2, cols=num_columns)
 
-    print("🧼 Sheet fully reset (values + formatting + freezes)")
+    print("🧼 Sheet fully reset (safe resize)")
 
 def apply_ebitda_margin_color_scale(ws, col_idx):
     """
