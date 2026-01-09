@@ -10,7 +10,7 @@ from playwright._impl._errors import Error as PlaywrightError
 from src.brokers.dealopportunities_client import DealOpportunitiesClient
 from src.sector_mappings.dealopportunities import map_dealopportunities_sector
 from src.integrations.drive_folders import get_drive_parent_folder_id
-from src.integrations.google_drive import drive_service
+from src.integrations.google_drive import get_drive_service
 from src.integrations.google_drive import upload_pdf_to_drive
 
 # =========================================================
@@ -57,7 +57,7 @@ def find_or_create_deal_folder(
         f"and trashed = false"
     )
 
-    result = drive_service.files().list(
+    result = get_drive_service().files().list(
         q=query,
         spaces="drive",
         fields="files(id, name)",
@@ -74,7 +74,7 @@ def find_or_create_deal_folder(
             f"Multiple Drive folders found for deal_id={deal_id}"
         )
 
-    folder = drive_service.files().create(
+    folder = get_drive_service().files().create(
         body={
             "name": deal_id,
             "mimeType": "application/vnd.google-apps.folder",
