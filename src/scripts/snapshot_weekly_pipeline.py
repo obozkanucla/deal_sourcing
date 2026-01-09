@@ -25,7 +25,7 @@ def snapshot_exists(conn, snapshot_key: str) -> bool:
     ).fetchone() is not None
 
 
-def main():
+def snapshot_pipeline_run(force_current_week=False):
     iso_year, iso_week, snapshot_key = get_snapshot_week(RUN_DATE)
 
     print("=" * 72)
@@ -39,29 +39,37 @@ def main():
     conn.row_factory = sqlite3.Row
 
     if snapshot_exists(conn, snapshot_key):
-        print("⛔ Snapshot already exists — aborting")
-        return
+        if not force_current_week:
+            print("⛔ Snapshot already exists — skipping")
+            conn.close()
+            return
+        else:
+            print("♻️ Overwriting snapshot for", snapshot_key)
+            conn.execute(
+                "DELETE FROM pipeline_snapshots WHERE snapshot_key = ?",
+                (snapshot_key,)
+            )
+            conn.commit()
 
-    print("✅ No snapshot found — proceeding")
     rows = conn.execute(
         """
-           SELECT
-                COALESCE(industry, 'NA') AS industry,
-                COALESCE(
-                    status,
-                    CASE
-                        WHEN last_updated < DATE('now', '-7 days')
-                            THEN 'not_yet_analysed'
-                        ELSE 'new'
-                    END
-                ) AS status,
-                source,
-                COUNT(*) AS deal_count
-            FROM deals
-            GROUP BY
-                industry,
+        SELECT
+            COALESCE(industry, 'NA') AS industry,
+            COALESCE(
                 status,
-                source;
+                CASE
+                    WHEN last_updated < DATE('now', '-7 days')
+                        THEN 'not_yet_analysed'
+                    ELSE 'new'
+                END
+            ) AS status,
+            source,
+            COUNT(*) AS deal_count
+        FROM deals
+        GROUP BY
+            industry,
+            status,
+            source;
         """
     ).fetchall()
 
@@ -69,6 +77,7 @@ def main():
 
     if DRY_RUN:
         print("\n🧪 DRY_RUN — snapshot NOT written")
+        conn.close()
         return
 
     conn.executemany(
@@ -105,6 +114,5 @@ def main():
 
     print("✅ Weekly snapshot written successfully")
 
-
 if __name__ == "__main__":
-    main()
+    snapshot_pipeline_run()
