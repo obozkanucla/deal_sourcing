@@ -9,21 +9,43 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS pipeline_snapshots (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            snapshot_year INTEGER NOT NULL,
-            snapshot_week INTEGER NOT NULL,
-            snapshot_key TEXT NOT NULL,
-            industry TEXT NOT NULL,
-            status TEXT NOT NULL,
-            source TEXT NOT NULL,
-            deal_count INTEGER NOT NULL,
-            snapshot_run_date DATE NOT NULL
-        )
-        """
-    )
+    conn.execute("""
+    UPDATE deals
+        SET
+            industry = NULL,
+            sector = NULL,
+            title = NULL,
+            description = NULL,
+            location_raw = NULL,
+            location = NULL,
+            drive_folder_id = NULL,
+            drive_folder_url = NULL,
+            pdf_drive_url = NULL,
+            pdf_generated_at = NULL,
+            detail_fetched_at = NULL,
+            last_updated = CURRENT_TIMESTAMP,
+            last_updated_source = 'AUTO'
+        WHERE source = 'DealOpportunities'
+          AND source_listing_id IN (
+            'S12257','S12261','S12267','S12268','S12272','S12275',
+            'S12279','S12282','S12285','S12287','S12288','S12291',
+            'S12300','S12313','S12315','S12316','S12319','S12320'
+  """)
+    # conn.execute(
+    #     """
+    #     CREATE TABLE IF NOT EXISTS pipeline_snapshots (
+    #         id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #         snapshot_year INTEGER NOT NULL,
+    #         snapshot_week INTEGER NOT NULL,
+    #         snapshot_key TEXT NOT NULL,
+    #         industry TEXT NOT NULL,
+    #         status TEXT NOT NULL,
+    #         source TEXT NOT NULL,
+    #         deal_count INTEGER NOT NULL,
+    #         snapshot_run_date DATE NOT NULL
+    #     )
+    #     """
+    # )
     # if not column_exists(conn, "deals", "pass_reason"):
     #     conn.execute ("ALTER TABLE deals ADD COLUMN pass_reason TEXT;")
 
