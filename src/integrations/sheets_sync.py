@@ -170,7 +170,6 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
         c for c in columns
         if c.pull and not c.system and c.name in header_set
     ]
-
     updated = 0
     skipped = 0
 

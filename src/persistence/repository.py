@@ -31,7 +31,8 @@ class SQLiteRepository:
                                 "ebitda_k",
                                 "asking_price_k",
                                 "last_updated_source",
-                                "last_updated"
+                                "last_updated",
+                                "pass_reason"
                             }
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -275,6 +276,7 @@ class SQLiteRepository:
                 decision,
                 drive_folder_url,
                 incorporation_year,
+                pass_reason,
                 -- base financials
                 revenue_k,
                 ebitda_k,
