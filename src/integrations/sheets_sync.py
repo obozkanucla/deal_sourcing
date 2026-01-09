@@ -164,16 +164,34 @@ def push_sqlite_to_sheets(repo, ws):
 # PULL: Sheets → SQLite
 # -----------------------------
 
+def normalize_k(val):
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
 def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
     """
     Reverse sync: Google Sheets → SQLite
-
-    Contract:
-    - Only analyst-editable fields (pull=True, system=False) are considered
-    - SQLite is updated ONLY if sheet values differ from DB
-    - last_updated is bumped ONLY when a real change occurs
-    - Safe to run repeatedly (idempotent)
     """
+
+    NUMERIC_COLUMNS = {
+        "revenue_k",
+        "ebitda_k",
+        "asking_price_k",
+        "revenue_growth_pct",
+        "leverage_pct",
+    }
+
+    def normalize_numeric(val):
+        if val in ("", None):
+            return None
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
 
     values = ws.get_all_values()
     if not values:
@@ -186,17 +204,15 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
     header_set = set(headers)
     col_idx = {h: i for i, h in enumerate(headers)}
 
-    # Pullable = analyst-editable columns only
     pullable_columns = [
         c for c in columns
         if c.pull and not c.system and c.name in header_set
     ]
+
     updated = 0
     skipped = 0
 
     for row in rows:
-        # deal_uid is mandatory
-
         if "deal_uid" not in col_idx:
             continue
 
@@ -208,34 +224,44 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
         try:
             source, source_listing_id = deal_uid.split(":", 1)
         except ValueError:
-            continue  # malformed UID
+            continue
 
         db_deal = repo.fetch_by_source_and_listing(source, source_listing_id)
         if not db_deal:
-            continue  # DB is source of truth for row existence
+            continue
 
         updates = {}
 
         for col in pullable_columns:
             idx = col_idx[col.name]
-            sheet_val = row[idx].strip() if idx < len(row) else ""
+            raw_val = row[idx].strip() if idx < len(row) else ""
 
             db_val = db_deal.get(col.name)
 
-            # Blank handling
-            if sheet_val == "":
-                if col.allow_blank_pull and db_val is not None:
-                    updates[col.name] = None
-                continue
+            # ---------- NUMERIC ----------
+            if col.name in NUMERIC_COLUMNS:
+                sheet_val = normalize_numeric(raw_val)
 
-            # Normalize comparison (Sheets always gives strings)
-            if str(sheet_val) != str(db_val):
-                updates[col.name] = sheet_val
+                if sheet_val is None:
+                    if col.allow_blank_pull and db_val is not None:
+                        updates[col.name] = None
+                    continue
+
+                if sheet_val != db_val:
+                    updates[col.name] = sheet_val
+
+            # ---------- NON-NUMERIC ----------
+            else:
+                if raw_val == "":
+                    if col.allow_blank_pull and db_val is not None:
+                        updates[col.name] = None
+                    continue
+
+                if str(raw_val) != str(db_val):
+                    updates[col.name] = raw_val
 
         if updates:
             updates["last_updated_source"] = "MANUAL"
-
-            # ✅ Analyst made a real change → persist + bump last_updated
             repo.update_deal_fields(
                 source=source,
                 source_listing_id=source_listing_id,
@@ -968,3 +994,51 @@ def apply_left_alignment(ws, column_names):
     if requests:
         spreadsheet.batch_update({"requests": requests})
         print(f"↔️ Left-aligned columns: {', '.join(column_names)}")
+
+def hide_columns(ws, col_indices: list[int]):
+    """
+    Hide columns by zero-based index.
+    Safe to run repeatedly.
+    """
+    requests = []
+
+    for idx in col_indices:
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": ws.id,
+                    "dimension": "COLUMNS",
+                    "startIndex": idx,
+                    "endIndex": idx + 1,
+                },
+                "properties": {
+                    "hiddenByUser": True
+                },
+                "fields": "hiddenByUser",
+            }
+        })
+
+    if requests:
+        ws.spreadsheet.batch_update({"requests": requests})
+
+def unhide_all_columns(ws):
+    spreadsheet = ws.spreadsheet
+    sheet_id = ws.id
+
+    spreadsheet.batch_update({
+        "requests": [{
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": 0,
+                    "endIndex": 200,  # safely beyond current width
+                },
+                "properties": {
+                    "hiddenByUser": False
+                },
+                "fields": "hiddenByUser"
+            }
+        }]
+    })
+    print("👀 All columns unhidden")

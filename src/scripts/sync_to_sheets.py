@@ -29,7 +29,9 @@ from src.integrations.sheets_sync import (
     clear_sheet_filter,
     apply_filter_to_used_range,
     apply_pass_reason_required_formatting,
-    apply_left_alignment
+    apply_left_alignment,
+    hide_columns,
+    unhide_all_columns
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
@@ -64,6 +66,7 @@ def main():
     sh = gc.open_by_key(SPREADSHEET_ID)
     ws = sh.worksheet(WORKSHEET_NAME)
 
+    # unhide_all_columns(ws)
 
     # 1️⃣ PULL analyst edits FIRST
     pull_sheets_to_sqlite(
@@ -126,6 +129,7 @@ def main():
 
     highlight_analyst_editable_columns(ws)
     sheets_sleep()
+    # hide_columns(ws, [0, 2])  # A = deal_uid, C = source_listing_id
     protect_system_columns(ws,["burak@sab.partners",
                                "serdar@sab.partners",
                                "adrien@sab.partners"])

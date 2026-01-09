@@ -83,14 +83,14 @@ jobs:
       # --------------------------------------------------
       # Phase 0.0 — Reset Legacy Deals & Reimport
       # --------------------------------------------------
-      - name: Reset Dmitry deals
-        run: python -m src.scripts.reset_dmitry_deals
+#      - name: Reset Dmitry deals
+#        run: python -m src.scripts.reset_dmitry_deals
 
       # --------------------------------------------------
       # Phase 0 — Legacy imports
       # --------------------------------------------------
-#      - name: Import legacy deals
-#        run: python -m src.scripts.import_legacy_deals
+      - name: Import legacy deals
+        run: python -m src.scripts.import_legacy_deals
 #
       - name: Import Dmitry deals
         run: python -m src.scripts.import_dmitry_deals
