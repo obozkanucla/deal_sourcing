@@ -584,7 +584,7 @@ def reset_sheet_state(ws, num_columns: int):
     ws.clear()
 
     # 5️⃣ Reset column widths (Google default ≈ 100px)
-    ws.resize(rows=1, cols=num_columns)
+    ws.resize(rows=2, cols=num_columns)
 
     print("🧼 Sheet fully reset (values + formatting + freezes)")
 
