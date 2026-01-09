@@ -2,96 +2,88 @@ import sqlite3
 import time
 import random
 import hashlib
-import json
 from datetime import datetime
 from pathlib import Path
 
-from bs4 import BeautifulSoup
 from playwright._impl._errors import Error as PlaywrightError
 
 from src.brokers.dealopportunities_client import DealOpportunitiesClient
 from src.sector_mappings.dealopportunities import map_dealopportunities_sector
 from src.integrations.drive_folders import get_drive_parent_folder_id
-from src.integrations.google_drive import (
-    find_or_create_deal_folder,
-    upload_pdf_to_drive,
-)
+from src.integrations.google_drive import drive_service
+from src.integrations.google_drive import upload_pdf_to_drive
 
 # =========================================================
 # CONFIG
 # =========================================================
 
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
-
 PDF_ROOT = Path("/tmp/do_pdfs")
 PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
-MAX_RUNTIME = 2 * 60          # GitHub-safe
+MAX_RUNTIME = 5 * 60          # GitHub-safe
 BROWSER_RESET_EVERY = 25
-
 HUMAN_SLEEP_BASE = 4
 HUMAN_SLEEP_JITTER = 4
 
 DRY_RUN = False
 
 # =========================================================
-# HUMAN BEHAVIOUR
+# HUMAN-LIKE THROTTLING
 # =========================================================
 
 def human_sleep():
     time.sleep(HUMAN_SLEEP_BASE + random.random() * HUMAN_SLEEP_JITTER)
 
 # =========================================================
-# HTML PARSING (RESTORED)
+# DRIVE — PATCHED FOLDER DETECTION (NO DUPLICATES)
 # =========================================================
 
-def extract_title(html: str) -> str | None:
-    soup = BeautifulSoup(html, "html.parser")
-    h1 = soup.select_one("h1 > a[href*='/opportunity/']")
-    return h1.get_text(strip=True) if h1 else None
+def find_or_create_deal_folder(
+    parent_folder_id: str,
+    deal_id: str,
+) -> str:
+    """
+    PATCH ONLY:
+    - name + parent scoped
+    - trashed excluded
+    - hard fail on duplicates
+    """
 
+    query = (
+        f"name = '{deal_id}' "
+        f"and mimeType = 'application/vnd.google-apps.folder' "
+        f"and '{parent_folder_id}' in parents "
+        f"and trashed = false"
+    )
 
-def extract_description(html: str) -> str | None:
-    soup = BeautifulSoup(html, "html.parser")
+    result = drive_service.files().list(
+        q=query,
+        spaces="drive",
+        fields="files(id, name)",
+        pageSize=2,
+    ).execute()
 
-    for selector in [
-        ".opportunity-description",
-        ".content",
-        "article",
-    ]:
-        el = soup.select_one(selector)
-        if el:
-            text = el.get_text("\n", strip=True)
-            if text:
-                return text
+    files = result.get("files", [])
 
-    legacy = soup.select_one("table td[valign='top']")
-    if legacy:
-        return legacy.get_text("\n", strip=True)
+    if len(files) == 1:
+        return files[0]["id"]
 
-    return None
+    if len(files) > 1:
+        raise RuntimeError(
+            f"Multiple Drive folders found for deal_id={deal_id}"
+        )
 
+    folder = drive_service.files().create(
+        body={
+            "name": deal_id,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents": [parent_folder_id],
+        },
+        fields="id",
+    ).execute()
 
-def extract_facts(html: str) -> dict:
-    soup = BeautifulSoup(html, "html.parser")
-    facts = {}
-
-    for dt in soup.select("dl dt"):
-        key = dt.get_text(strip=True).lower()
-        dd = dt.find_next_sibling("dd")
-        if not dd:
-            continue
-
-        value = dd.get_text(strip=True)
-        if not value:
-            continue
-
-        if "sector" in key:
-            facts["sector_raw"] = value
-        elif "region" in key or "location" in key or "area" in key:
-            facts["location_raw"] = value
-
-    return facts
+    return folder["id"]
 
 # =========================================================
 # MAIN
@@ -99,7 +91,7 @@ def extract_facts(html: str) -> dict:
 
 def enrich_dealopportunities():
     print("=" * 72)
-    print("🧠 DealOpportunities Incremental Enrichment (FULL)")
+    print("🧠 DealOpportunities Incremental Enrichment")
     print(f"📀 SQLite DB : {DB_PATH}")
     print(f"🧪 DRY_RUN   : {DRY_RUN}")
     print("=" * 72)
@@ -110,35 +102,35 @@ def enrich_dealopportunities():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
+    # -----------------------------------------------------
+    # PATCH: force re-enrichment of BROKEN records
+    # -----------------------------------------------------
     rows = conn.execute(
         """
         SELECT
             id,
             source_listing_id,
             source_url,
-            title,
             sector_raw,
-            location_raw,
+            industry,
+            title,
             description,
+            location,
             detail_fetched_at
         FROM deals
         WHERE source = 'DealOpportunities'
           AND (
                 detail_fetched_at IS NULL
-        
+             OR industry IS NULL
+             OR industry = 'Other'
              OR title IS NULL
              OR description IS NULL
-             OR location_raw IS NULL
-             OR industry IS NULL
-             OR sector IS NULL
-             OR pdf_drive_url IS NULL
-        
-             OR detail_fetched_at < DATE('now', '-7 days')
+             OR location IS NULL
           )
         ORDER BY
             detail_fetched_at IS NOT NULL,
             detail_fetched_at ASC,
-            last_seen DESC;
+            last_seen DESC
         """
     ).fetchall()
 
@@ -171,7 +163,7 @@ def enrich_dealopportunities():
             pdf_path = PDF_ROOT / f"{deal_key}.pdf"
 
             try:
-                html = client.fetch_listing_detail_and_pdf(
+                html, parsed = client.fetch_listing_detail_and_pdf(
                     url=url,
                     pdf_path=pdf_path,
                 )
@@ -180,7 +172,8 @@ def enrich_dealopportunities():
                     """
                     UPDATE deals
                     SET pdf_error = ?,
-                        last_updated = CURRENT_TIMESTAMP
+                        last_updated = CURRENT_TIMESTAMP,
+                        last_updated_source = 'AUTO'
                     WHERE id = ?
                     """,
                     (str(e)[:500], deal_id),
@@ -191,18 +184,19 @@ def enrich_dealopportunities():
 
             content_hash = hashlib.sha256(html.encode()).hexdigest()
 
-            title = extract_title(html)
-            description = extract_description(html)
-            facts = extract_facts(html)
-
-            raw_sector = facts.get("sector_raw") or r["sector_raw"]
-            location_raw = facts.get("location_raw") or r["location_raw"]
-
-            mapping = map_dealopportunities_sector(raw_sector=raw_sector)
+            # -------------------------------------------------
+            # AUTHORITATIVE SECTOR → INDUSTRY
+            # -------------------------------------------------
+            mapping = map_dealopportunities_sector(
+                raw_sector=r["sector_raw"]
+            )
 
             industry = mapping["industry"]
             sector = mapping["sector"]
 
+            # -------------------------------------------------
+            # DRIVE
+            # -------------------------------------------------
             parent_id = get_drive_parent_folder_id(
                 industry=industry,
                 broker="DealOpportunities",
@@ -211,7 +205,6 @@ def enrich_dealopportunities():
             deal_folder_id = find_or_create_deal_folder(
                 parent_folder_id=parent_id,
                 deal_id=deal_key,
-                deal_title=title or deal_key,
             )
 
             drive_folder_url = (
@@ -224,6 +217,9 @@ def enrich_dealopportunities():
                 folder_id=deal_folder_id,
             )
 
+            # -------------------------------------------------
+            # DB UPDATE — FULL RESTORE
+            # -------------------------------------------------
             if not DRY_RUN:
                 conn.execute(
                     """
@@ -231,8 +227,7 @@ def enrich_dealopportunities():
                     SET
                         title = ?,
                         description = ?,
-                        sector_raw = ?,
-                        location_raw = ?,
+                        location = ?,
                         industry = ?,
                         sector = ?,
                         content_hash = ?,
@@ -246,10 +241,9 @@ def enrich_dealopportunities():
                     WHERE id = ?
                     """,
                     (
-                        title,
-                        description,
-                        raw_sector,
-                        location_raw,
+                        parsed.get("title"),
+                        parsed.get("description"),
+                        parsed.get("location"),
                         industry,
                         sector,
                         content_hash,
