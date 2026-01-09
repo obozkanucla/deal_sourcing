@@ -125,18 +125,20 @@ def enrich_dealopportunities():
         WHERE source = 'DealOpportunities'
           AND (
                 detail_fetched_at IS NULL
+        
              OR title IS NULL
              OR description IS NULL
              OR location_raw IS NULL
              OR industry IS NULL
              OR sector IS NULL
              OR pdf_drive_url IS NULL
+        
              OR detail_fetched_at < DATE('now', '-7 days')
           )
         ORDER BY
             detail_fetched_at IS NOT NULL,
             detail_fetched_at ASC,
-            last_seen DESC
+            last_seen DESC;
         """
     ).fetchall()
 
