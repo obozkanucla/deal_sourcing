@@ -9,4 +9,9 @@ with repo.get_conn() as conn:
     )
     conn.commit()
 
+    cur = conn.execute(
+        "ALTER TABLE deals ADD COLUMN description_hash TEXT"
+    )
+    conn.commit()
+
 print(f"Deleted {cur.rowcount} Dmitry deals")
