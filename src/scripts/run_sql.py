@@ -9,8 +9,23 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    if not column_exists(conn, "deals", "pass_reason"):
-        conn.execute ("ALTER TABLE deals ADD COLUMN pass_reason TEXT;")
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pipeline_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            snapshot_year INTEGER NOT NULL,
+            snapshot_week INTEGER NOT NULL,
+            snapshot_key TEXT NOT NULL,
+            industry TEXT NOT NULL,
+            status TEXT NOT NULL,
+            source TEXT NOT NULL,
+            deal_count INTEGER NOT NULL,
+            snapshot_run_date DATE NOT NULL
+        )
+        """
+    )
+    # if not column_exists(conn, "deals", "pass_reason"):
+    #     conn.execute ("ALTER TABLE deals ADD COLUMN pass_reason TEXT;")
 
     # if not column_exists(conn, "deals", "extracted_json"):
     #     conn.execute("ALTER TABLE deals ADD COLUMN extracted_json TEXT")
