@@ -5,9 +5,10 @@ Sheets sync contract:
 - Script is safe to run repeatedly (idempotent)
 """
 
-
-import time
 from pathlib import Path
+import os
+import time
+import random
 
 from src.domain.deal_columns import DEAL_COLUMNS
 from src.persistence.repository import SQLiteRepository
@@ -36,8 +37,6 @@ SPREADSHEET_ID_Production = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
 WORKSHEET_NAME = "Deals"
 SPREADSHEET_ID_Staging = "1Iioxt688xxw9fVbiixAMGrycwl22GqSh91p4EYsEAH0"
 
-import os
-
 PIPELINE_ENV = os.getenv("PIPELINE_ENV", "local")  # local | github
 # SHEET_MODE = os.getenv("SHEET_MODE", "test")       # prod | test
 
@@ -47,6 +46,10 @@ else:
     SPREADSHEET_ID = SPREADSHEET_ID_Staging
 
 DB_PATH = Path("db/deals.sqlite")
+
+
+def sheets_sleep(base=0.3, jitter=0.4):
+    time.sleep(base + random.random() * jitter)
 
 def main():
     print("📄 Google Sheet:")
@@ -67,37 +70,45 @@ def main():
         ws,
         columns=DEAL_COLUMNS
     )
-
+    sheets_sleep()
     recalculate_financial_metrics()
-
+    sheets_sleep()
     # 2️⃣ Clean sheet
     reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
-
+    sheets_sleep()
     # Clear all protections
     # clear_all_protections(ws)
 
     # 3️⃣ Ensure headers (safe, non-destructive)
     ensure_sheet_headers(ws, DEAL_COLUMNS)
-
+    sheets_sleep()
     # 4️⃣ Push new deals only
     rows_written = push_sqlite_to_sheets(repo, ws)
+    sheets_sleep()
     apply_dropdown_validations(ws)  # ← HERE
-
+    sheets_sleep()
     # ✅ NOW we know dimensions
     num_rows = rows_written + 1
     num_cols = len(DEAL_COLUMNS)
 
     apply_sheet_formatting(ws)
+    sheets_sleep()
     apply_base_sheet_formatting(ws)
+    sheets_sleep()
     clear_sheet_filter(ws)
+    sheets_sleep()
     clear_all_protections(ws)
+    sheets_sleep()
     apply_filter_to_used_range(ws, num_rows, num_cols)
+    sheets_sleep()
     apply_pass_reason_required_formatting(ws)
+    sheets_sleep()
     apply_left_alignment(ws, ["revenue_k", "ebitda_k"])
+    sheets_sleep()
 
     # 5️⃣ Enrichment / backfills
     update_folder_links(repo, ws)
-
+    sheets_sleep()
     backfill_system_columns(
         repo,
         ws,
@@ -113,10 +124,10 @@ def main():
     )
 
     highlight_analyst_editable_columns(ws)
-
+    sheets_sleep()
     protect_system_columns(ws,["burak@sab.partners",
                                "serdar@sab.partners",
                                "adrien@sab.partners"])
-
+    sheets_sleep()
 if __name__ == "__main__":
     main()
