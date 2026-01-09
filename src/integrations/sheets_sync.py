@@ -831,34 +831,48 @@ def apply_dropdown_validations(ws):
 
 def clear_all_protections(ws):
     """
-    Remove all sheet-level and range-level protections.
-    Safe to run repeatedly.
+    HARD RESET:
+    Removes all protected ranges and sheet protections
+    from the given worksheet.
+    Safe, idempotent, production-safe.
     """
+
     spreadsheet = ws.spreadsheet
     sheet_id = ws.id
 
     meta = spreadsheet.fetch_sheet_metadata()
-
     requests = []
 
-    for sheet in meta["sheets"]:
-        if sheet["properties"]["sheetId"] != sheet_id:
+    for sheet in meta.get("sheets", []):
+        props = sheet.get("properties", {})
+        if props.get("sheetId") != sheet_id:
             continue
 
-        protections = sheet.get("protectedRanges", [])
-
-        for p in protections:
+        # 1️⃣ Remove protected ranges
+        for pr in sheet.get("protectedRanges", []):
             requests.append({
                 "deleteProtectedRange": {
-                    "protectedRangeId": p["protectedRangeId"]
+                    "protectedRangeId": pr["protectedRangeId"]
+                }
+            })
+
+        # 2️⃣ Remove sheet protection (if present)
+        if "protectedSheet" in sheet:
+            requests.append({
+                "updateProtectedRange": {
+                    "protectedRange": {
+                        "protectedRangeId": sheet["protectedSheet"]["protectedRangeId"],
+                        "protectedSheet": None
+                    },
+                    "fields": "protectedSheet"
                 }
             })
 
     if requests:
         spreadsheet.batch_update({"requests": requests})
-        print(f"🧹 Cleared {len(requests)} existing protections")
+        print(f"🧹 Cleared {len(requests)} protections")
     else:
-        print("🧹 No existing protections found")
+        print("🧹 No protections found")
 
 def clear_sheet_filter(ws):
     """
@@ -910,3 +924,41 @@ def apply_filter_to_used_range(ws, num_rows, num_cols):
     })
 
     print("🔎 Filter reapplied to full data range")
+
+def _get_col_index(columns, name):
+    for i, c in enumerate(columns):
+        if c.name == name:
+            return i
+    return None
+
+def apply_left_alignment(ws, column_names):
+    spreadsheet = ws.spreadsheet
+    sheet_id = ws.id
+
+    requests = []
+
+    for col_name in column_names:
+        col_idx = _get_col_index(DEAL_COLUMNS, col_name)
+        if col_idx is None:
+            continue
+
+        requests.append({
+            "repeatCell": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "startRowIndex": 1,  # skip header
+                    "startColumnIndex": col_idx,
+                    "endColumnIndex": col_idx + 1,
+                },
+                "cell": {
+                    "userEnteredFormat": {
+                        "horizontalAlignment": "LEFT"
+                    }
+                },
+                "fields": "userEnteredFormat.horizontalAlignment"
+            }
+        })
+
+    if requests:
+        spreadsheet.batch_update({"requests": requests})
+        print(f"↔️ Left-aligned columns: {', '.join(column_names)}")

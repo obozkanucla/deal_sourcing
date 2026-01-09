@@ -81,28 +81,43 @@ def normalize_status(raw):
         return "not_yet_analysed"
     return PIPELINE_STATUS_CANONICAL.get(raw, raw.strip().lower())
 
+from datetime import date
+
+def current_snapshot_key():
+    iso_year, iso_week, _ = date.today().isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
 
 # -------------------------------------------------
 # MAIN PLOT FUNCTION
 # -------------------------------------------------
 
-def plot_latest_pipeline_snapshot():
+def plot_latest_pipeline_snapshot(
+        force_current_week: bool = False
+):
     conn = sqlite3.connect(DB_PATH)
-
-    snapshot = pd.read_sql(
-        """
-        SELECT
-            snapshot_key,
-            COALESCE(industry, 'NA') AS industry,
-            status,
-            deal_count
-        FROM pipeline_snapshots
-        WHERE snapshot_key = (
-            SELECT MAX(snapshot_key) FROM pipeline_snapshots
-        )
-        """,
-        conn,
+    snapshot_key = (
+        current_snapshot_key()
+        if force_current_week
+        else None
     )
+
+    query = """
+            SELECT snapshot_key, \
+                   COALESCE(industry, 'NA') AS industry, \
+                   status, \
+                   deal_count
+            FROM pipeline_snapshots \
+            """
+
+    if snapshot_key:
+        query += " WHERE snapshot_key = ?"
+        params = (snapshot_key,)
+    else:
+        query += " WHERE snapshot_key = (SELECT MAX(snapshot_key) FROM pipeline_snapshots)"
+        params = ()
+
+    snapshot = pd.read_sql(query, conn, params=params)
+
     conn.close()
 
     if snapshot.empty:

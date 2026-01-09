@@ -27,7 +27,8 @@ from src.integrations.sheets_sync import (
     apply_dropdown_validations,
     clear_sheet_filter,
     apply_filter_to_used_range,
-    apply_pass_reason_required_formatting
+    apply_pass_reason_required_formatting,
+    apply_left_alignment
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
@@ -89,8 +90,10 @@ def main():
     apply_sheet_formatting(ws)
     apply_base_sheet_formatting(ws)
     clear_sheet_filter(ws)
+    clear_all_protections(ws)
     apply_filter_to_used_range(ws, num_rows, num_cols)
     apply_pass_reason_required_formatting(ws)
+    apply_left_alignment(ws, ["revenue_k", "ebitda_k"])
 
     # 5️⃣ Enrichment / backfills
     update_folder_links(repo, ws)

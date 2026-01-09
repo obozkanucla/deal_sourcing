@@ -3,7 +3,7 @@ from src.scripts.snapshot_weekly_chart import plot_latest_pipeline_snapshot
 from src.scripts.snapshot_weekly_slack import post_snapshot_to_slack
 
 def main():
-    snapshot_key, chart_path = plot_latest_pipeline_snapshot()
+    snapshot_key, chart_path = plot_latest_pipeline_snapshot(force_current_week=True)
     post_snapshot_to_slack(snapshot_key, chart_path)
     print(f"✅ Snapshot {snapshot_key} charted and sent to Slack")
 
