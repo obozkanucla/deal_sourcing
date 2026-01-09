@@ -269,7 +269,7 @@ def update_folder_links(repo, ws):
             f"Required column missing in sheet headers. Found: {headers}"
         ) from e
 
-    updates = 0
+    updates = []
 
     for row_idx, row in enumerate(rows, start=2):  # header = row 1
         deal_uid = row[deal_uid_col].strip() if deal_uid_col < len(row) else ""
@@ -278,38 +278,32 @@ def update_folder_links(repo, ws):
         if not deal_uid or current_link:
             continue
 
-        # deal_uid = "Source:ListingID"
         try:
             source, source_listing_id = deal_uid.split(":", 1)
         except ValueError:
-            continue  # malformed UID, skip safely
+            continue
 
         deal = repo.fetch_by_source_and_listing(source, source_listing_id)
         if not deal:
             continue
 
-        # folder_url = deal.get("drive_folder_url")
-        folder_url = (
-            f'=HYPERLINK("{deal["drive_folder_url"]}", "Folder")'
-            if deal.get("drive_folder_url")
-            else ""
-                    )
-
-        if not folder_url:
+        drive_url = deal.get("drive_folder_url")
+        if not drive_url:
             continue
 
-        ws.update_cell(
-            row_idx,
-            folder_col + 1,  # Sheets are 1-indexed
-            f'=HYPERLINK("{folder_url}", "Folder")',
-        )
+        updates.append({
+            "range": f"{ws.title}!{chr(ord('A') + folder_col)}{row_idx}",
+            "values": [[f'=HYPERLINK("{drive_url}", "Folder")']]
+        })
 
-        updates += 1
+    if not updates:
+        print("✅ No Drive Folder links to update")
+        return
 
-        if updates % 20 == 0:
-            time.sleep(1)
+    # 🔑 SINGLE write
+    ws.batch_update(updates)
 
-    print(f"✅ Updated {updates} Drive Folder links")
+    print(f"✅ Updated {len(updates)} Drive Folder links")
 
 def backfill_system_columns(repo, ws, columns, batch_size=100, force=False):
     """
@@ -509,6 +503,30 @@ def unfreeze_sheet(ws):
     })
     print("🧊 Sheet unfrozen")
 
+def clear_all_conditional_formatting(ws):
+    spreadsheet = ws.spreadsheet
+    sheet_id = ws.id
+
+    meta = spreadsheet.fetch_sheet_metadata()
+    rules = []
+
+    for sheet in meta["sheets"]:
+        if sheet["properties"]["sheetId"] == sheet_id:
+            rules = sheet.get("conditionalFormats", [])
+
+    requests = [
+        {
+            "deleteConditionalFormatRule": {
+                "sheetId": sheet_id,
+                "index": 0
+            }
+        }
+        for _ in rules
+    ]
+
+    if requests:
+        spreadsheet.batch_update({"requests": requests})
+
 def reset_sheet_state(ws, num_columns: int):
     """
     Hard reset a sheet:
@@ -560,13 +578,7 @@ def reset_sheet_state(ws, num_columns: int):
 
     # ⚠️ Conditional rules must be deleted one-by-one.
     # We don’t know how many exist, so we loop defensively.
-    while True:
-        try:
-            ws.spreadsheet.batch_update({"requests": requests})
-            break
-        except Exception:
-            # stop when no more conditional rules exist
-            break
+    clear_all_conditional_formatting(ws)
 
     # 4️⃣ Clear values last (after formatting reset)
     ws.clear()
@@ -633,8 +645,8 @@ def apply_sheet_formatting(ws):
 
 
     dropdown_cols = ["status", "decision", "owner"]
+    apply_dropdown_validations(ws)
     for name in dropdown_cols:
-        apply_dropdown_validations(ws)
         apply_status_format_rules(ws, name, col[name])
 
 
@@ -951,18 +963,21 @@ def apply_left_alignment(ws, column_names):
     spreadsheet = ws.spreadsheet
     sheet_id = ws.id
 
+    header_idx = header_to_col_idx(ws)  # ← source of truth
+
     requests = []
 
     for col_name in column_names:
-        col_idx = _get_col_index(DEAL_COLUMNS, col_name)
-        if col_idx is None:
+        if col_name not in header_idx:
             continue
+
+        col_idx = header_idx[col_name] - 1  # 0-based
 
         requests.append({
             "repeatCell": {
                 "range": {
                     "sheetId": sheet_id,
-                    "startRowIndex": 1,  # skip header
+                    "startRowIndex": 1,
                     "startColumnIndex": col_idx,
                     "endColumnIndex": col_idx + 1,
                 },
