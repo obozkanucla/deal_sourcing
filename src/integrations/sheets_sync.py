@@ -902,7 +902,7 @@ def clear_sheet_filter(ws):
 
     if requests:
         spreadsheet.batch_update({"requests": requests})
-        print(f"🧹 Cleared {len(requests)} sheet  filters")
+        print(f"🧹 Cleared {len(requests)} sheet filters")
     else:
         print("🧹 Sheet already clean")
 

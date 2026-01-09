@@ -73,8 +73,8 @@ def map_interest_flag_to_decision(flag: str | None):
     flag = flag.strip().upper()
     return {
         "NO": "Pass",
-        "YES": "CIM",
-        "MAYBE": "On-Hold (UOffer)",
+        "YES": "Proceed",
+        "MAYBE": "Park",
     }.get(flag)
 
 
@@ -163,7 +163,6 @@ def main():
             if len(row) < 3:
                 continue
 
-            sector_raw = row[idx["sector"]] if "sector" in idx else None
             location = row[idx["region"]] if "region" in idx else None
             description = row[idx["description"]] if "description" in idx else None
 
@@ -187,9 +186,22 @@ def main():
                 else None
             )
 
+            INTEREST_HEADERS = {
+                "interest",
+                "interested",
+                "interest?",
+                "decision",
+                "Interested" # sometimes reused in Dmitry sheets
+            }
+
+            interest_col = next(
+                (idx[h] for h in INTEREST_HEADERS if h in idx),
+                None
+            )
+
             interest_flag = (
-                row[idx["interest"]]
-                if "interest" in idx and idx["interest"] < len(row)
+                row[interest_col].strip()
+                if interest_col is not None and interest_col < len(row)
                 else None
             )
 
@@ -201,8 +213,21 @@ def main():
             # Dmitry deals use description_hash as identity.
             # Do NOT change this without a full delete + reimport.
             source_listing_id = hash_description(description)
-
             decision = map_interest_flag_to_decision(interest_flag)
+            existing = repo.fetch_by_source_and_listing(
+                source="Dmitry",
+                source_listing_id=source_listing_id,
+            )
+
+            # ---------------------------------
+            # Decision downgrade protection
+            # ---------------------------------
+            if (
+                    decision is None
+                    and existing
+                    and existing.get("decision") is not None
+            ):
+                decision = existing.get("decision")
 
             deal = {
 
@@ -263,11 +288,6 @@ def main():
             if DRY_RUN:
                 print("DRY:", deal)
                 continue
-
-            existing = repo.fetch_by_source_and_listing(
-                source="Dmitry",
-                source_listing_id=source_listing_id,
-            )
 
             desc_hash = deal["description_hash"]
 
