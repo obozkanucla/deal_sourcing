@@ -62,7 +62,7 @@ jobs:
           gh release download db-latest \
             --pattern deals.sqlite \
             --output db/deals.sqlite \
-            --clobber
+            --clobber || echo "No existing DB found — starting fresh"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

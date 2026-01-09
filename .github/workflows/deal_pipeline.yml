@@ -76,7 +76,8 @@ jobs:
           mkdir -p db
           gh release download db-latest \
             --pattern deals.sqlite \
-            --output db/deals.sqlite || echo "No existing DB found — starting fresh"
+            --output db/deals.sqlite \
+            --clobber || echo "No existing DB found — starting fresh"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
