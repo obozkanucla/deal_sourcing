@@ -2,8 +2,8 @@ name: Deal Pipeline Reporting
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # daily at 6:00 UTC
-  workflow_dispatch:
+    - cron: "0 8 * * 5"   # Friday 08:00 UTC
+  workflow_dispatch:      # allow manual runs
 
 permissions:
   contents: write   # required for GitHub Releases
@@ -148,8 +148,9 @@ jobs:
       # Phase 4 — Sync outputs
       # --------------------------------------------------
       - name: Pipeline reporting to Slack
-        run: python -m src.scripts.snapshot_weekly_orchestrator(force_current_week=True)
-
+        env:
+          FORCE_CURRENT_WEEK: "1"
+        run: python -m src.scripts.snapshot_weekly_orchestrator
       # --------------------------------------------------
       # Persist canonical SQLite snapshot
       # --------------------------------------------------
