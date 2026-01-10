@@ -30,7 +30,7 @@ PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
 DETAIL_WAIT_SELECTOR = "#hero, div.teaser-content"
 SLEEP_BETWEEN = (3, 6)
-DRY_RUN = False
+DRY_RUN = True
 
 # Base classification (intentional for B4S)
 BASE_INDUSTRY = "Other"
@@ -117,11 +117,7 @@ def _normalize_pct(raw: str | None) -> float | None:
     return float(m.group(1))
 
 def extract_b4s_financials(soup: BeautifulSoup) -> dict:
-    """
-    Extracts broker-declared financials from BusinessesForSale.
-    These are authoritative broker values but NOT analyst overrides.
-    """
-    out: dict[str, float] = {}
+    facts = {}
 
     for dl in soup.select("div.financials-group dl"):
         dt = dl.select_one("dt")
@@ -133,32 +129,48 @@ def extract_b4s_financials(soup: BeautifulSoup) -> dict:
         value = dd.get_text(strip=True)
 
         if "turnover" in label:
-            revenue_k = _normalize_money_to_k(value)
-            if revenue_k is not None:
-                out["revenue_k"] = revenue_k
+            v = _normalize_money_to_k(value)
+            if v is not None:
+                facts["turnover"] = {
+                    "value_k": v,
+                    "unit": "k",
+                    "declared_as": value,
+                }
 
         elif "ebitda" in label:
-            ebitda_k = _normalize_money_to_k(value)
-            if ebitda_k is not None:
-                out["ebitda_k"] = ebitda_k
+            v = _normalize_money_to_k(value)
+            if v is not None:
+                facts["ebitda"] = {
+                    "value_k": v,
+                    "unit": "k",
+                    "declared_as": value,
+                }
 
         elif "profitability" in label:
-            # DO NOT assume EBITDA — store as declared margin
-            pct = _normalize_pct(value)
-            if pct is not None:
-                out["profit_margin_pct"] = pct
+            v = _normalize_pct(value)
+            if v is not None:
+                facts["profit_margin"] = {
+                    "pct": v,
+                    "declared_as": value,
+                }
 
         elif "growth" in label:
-            pct = _normalize_pct(value)
-            if pct is not None:
-                out["revenue_growth_pct"] = pct
+            v = _normalize_pct(value)
+            if v is not None:
+                facts["revenue_growth"] = {
+                    "pct": v,
+                    "declared_as": value,
+                }
 
         elif "leverage" in label:
-            pct = _normalize_pct(value)
-            if pct is not None:
-                out["leverage_pct"] = pct
+            v = _normalize_pct(value)
+            if v is not None:
+                facts["leverage"] = {
+                    "pct": v,
+                    "declared_as": value,
+                }
 
-    return out
+    return facts
 
 # -------------------------------------------------
 # MAIN
@@ -212,24 +224,24 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                     ),
                 )
                 page = context.new_page()
-
                 try:
                     page.goto(url, timeout=60_000)
                     page.wait_for_selector(DETAIL_WAIT_SELECTOR, timeout=20_000)
                 except TimeoutError:
                     print("⚠️ Listing unavailable — marking Lost")
-                    conn.execute(
-                        """
-                        UPDATE deals
-                        SET status = 'Lost',
-                            needs_detail_refresh = 0,
-                            detail_fetch_reason = 'listing_unavailable'
-                        WHERE id = ?
-                        """,
-                        (row_id,),
-                    )
-                    conn.commit()
-                    context.close()
+                    if not DRY_RUN:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET status = 'Lost',
+                                needs_detail_refresh = 0,
+                                detail_fetch_reason = 'listing_unavailable'
+                            WHERE id = ?
+                            """,
+                            (row_id,),
+                        )
+                        conn.commit()
+                        context.close()
                     continue
 
                 soup = BeautifulSoup(page.content(), "html.parser")
@@ -237,33 +249,35 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                 mv_id = extract_mv_id(soup)
                 if not mv_id:
                     print("⚠️ MV ID missing — quarantined")
-                    conn.execute(
-                        """
-                        UPDATE deals
-                        SET needs_detail_refresh = 0,
-                            detail_fetch_reason = 'mv_id_not_found'
-                        WHERE id = ?
-                        """,
-                        (row_id,),
-                    )
-                    conn.commit()
-                    context.close()
-                    continue
+                    if not DRY_RUN:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET needs_detail_refresh = 0,
+                                detail_fetch_reason = 'mv_id_not_found'
+                            WHERE id = ?
+                            """,
+                            (row_id,),
+                        )
+                        conn.commit()
+                        context.close()
+                        continue
 
                 if find_existing_mv_owner(conn, mv_id, row_id):
                     print(f"⚠️ Duplicate MV {mv_id} — quarantined")
-                    conn.execute(
-                        """
-                        UPDATE deals
-                        SET needs_detail_refresh = 0,
-                            detail_fetch_reason = 'duplicate_mv_id'
-                        WHERE id = ?
-                        """,
-                        (row_id,),
-                    )
-                    conn.commit()
-                    context.close()
-                    continue
+                    if not DRY_RUN:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET needs_detail_refresh = 0,
+                                detail_fetch_reason = 'duplicate_mv_id'
+                            WHERE id = ?
+                            """,
+                            (row_id,),
+                        )
+                        conn.commit()
+                        context.close()
+                        continue
 
                 # ---------------- PDF (clean + scoped) ----------------
                 pdf_path = PDF_ROOT / f"{mv_id}.pdf"
@@ -283,21 +297,21 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
 
                 page.wait_for_timeout(500)
                 page.emulate_media(media="print")
+                if not DRY_RUN:
+                    page.pdf(
+                        path=str(pdf_path),
+                        format="A4",
+                        margin={
+                            "top": "15mm",
+                            "bottom": "15mm",
+                            "left": "15mm",
+                            "right": "15mm",
+                        },
+                        print_background=True,
+                    )
 
-                page.pdf(
-                    path=str(pdf_path),
-                    format="A4",
-                    margin={
-                        "top": "15mm",
-                        "bottom": "15mm",
-                        "left": "15mm",
-                        "right": "15mm",
-                    },
-                    print_background=True,
-                )
-
-                if not pdf_path.exists() or pdf_path.stat().st_size < 10_000:
-                    raise RuntimeError("PDF generation failed")
+                    if not pdf_path.exists() or pdf_path.stat().st_size < 10_000:
+                        raise RuntimeError("PDF generation failed")
 
                 # ---------------- Extract ----------------
                 title = text_or_none(soup.select_one("#hero h1"))
@@ -307,99 +321,129 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
 
                 financials = extract_b4s_financials(soup)
 
+                # ---------- FLATTEN → DB SCHEMA (SINGLE SOURCE OF TRUTH) ----------
+                revenue_k = financials.get("turnover", {}).get("value_k")
+                ebitda_k = financials.get("ebitda", {}).get("value_k")
+                profit_margin_pct = financials.get("profit_margin", {}).get("pct")
+                revenue_growth_pct = financials.get("revenue_growth", {}).get("pct")
+                leverage_pct = financials.get("leverage", {}).get("pct")
+
                 content_hash = compute_content_hash(title, location, description)
 
-                # ---------------- Drive ----------------
-                parent_folder_id = get_drive_parent_folder_id(
-                    industry=BASE_INDUSTRY,
-                    broker="BusinessesForSale",
-                )
+                # ---------- DRY RUN GUARD ----------
+                if DRY_RUN:
+                    print("🔍 DRY RUN – mapped DB values")
+                    print("  revenue_k:", revenue_k)
+                    print("  ebitda_k:", ebitda_k)
+                    print("  profit_margin_pct:", profit_margin_pct)
+                    print("  revenue_growth_pct:", revenue_growth_pct)
+                    print("  leverage_pct:", leverage_pct)
 
-                deal_folder_id = find_or_create_deal_folder(
-                    parent_folder_id=parent_folder_id,
-                    deal_id=f"BFS-{mv_id}",
-                    deal_title=title,
-                )
+                    for name, val in {
+                        "revenue_k": revenue_k,
+                        "ebitda_k": ebitda_k,
+                        "profit_margin_pct": profit_margin_pct,
+                        "revenue_growth_pct": revenue_growth_pct,
+                        "leverage_pct": leverage_pct,
+                    }.items():
+                        assert val is None or isinstance(val, (int, float)), \
+                            f"{name} not numeric: {val} ({type(val)})"
 
-                pdf_drive_url = upload_pdf_to_drive(
-                    local_path=pdf_path,
-                    filename=f"{mv_id}.pdf",
-                    folder_id=deal_folder_id,
-                )
+                    context.close()
+                    continue
 
-                record_deal_artifact(
-                    conn=conn,
-                    deal_id=row_id,
-                    broker="BusinessesForSale",
-                    artifact_type="pdf",
-                    artifact_name=f"{mv_id}.pdf",
-                    drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
-                    drive_url=pdf_drive_url,
-                    industry=BASE_INDUSTRY,
-                    sector=BASE_SECTOR,
-                    created_by="enrich_businesses4sale.py",
-                )
+                if not DRY_RUN:
+                    # ---------------- Drive ----------------
+                    parent_folder_id = get_drive_parent_folder_id(
+                        industry=BASE_INDUSTRY,
+                        broker="BusinessesForSale",
+                    )
 
-                pdf_path.unlink(missing_ok=True)
+                    deal_folder_id = find_or_create_deal_folder(
+                        parent_folder_id=parent_folder_id,
+                        deal_id=f"BFS-{mv_id}",
+                        deal_title=title,
+                    )
 
-                # ---------------- DB UPDATE ----------------
-                conn.execute(
-                    """
-                    UPDATE deals
-                    SET
-                        source_listing_id = ?,
-                        title = ?,
-                        location = ?,
-                        description = ?,
-                        content_hash = ?,
+                    pdf_drive_url = upload_pdf_to_drive(
+                        local_path=pdf_path,
+                        filename=f"{mv_id}.pdf",
+                        folder_id=deal_folder_id,
+                    )
 
-                        revenue_k = ?,
-                        ebitda_k = ?,
-                        profit_margin_pct = ?,
-                        revenue_growth_pct = ?,
-                        leverage_pct = ?,
+                    record_deal_artifact(
+                        conn=conn,
+                        deal_id=row_id,
+                        broker="BusinessesForSale",
+                        artifact_type="pdf",
+                        artifact_name=f"{mv_id}.pdf",
+                        drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
+                        drive_url=pdf_drive_url,
+                        industry=BASE_INDUSTRY,
+                        sector=BASE_SECTOR,
+                        created_by="enrich_businesses4sale.py",
+                    )
 
-                        industry = ?,
-                        sector = ?,
-                        sector_source = 'unclassified',
-                        sector_inference_confidence = ?,
-                        sector_inference_reason = ?,
+                    pdf_path.unlink(missing_ok=True)
 
-                        pdf_drive_url = ?,
-                        drive_folder_id = ?,
-                        drive_folder_url =
-                          'https://drive.google.com/drive/folders/' || ?,
-                        detail_fetched_at = ?,
-                        needs_detail_refresh = 0,
-                        last_updated = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                    """,
-                    (
-                        mv_id,
-                        title,
-                        location,
-                        description,
-                        content_hash,
+                    # ---------------- DB UPDATE ----------------
+                    conn.execute(
+                        """
+                        UPDATE deals
+                        SET
+                            source_listing_id = ?,
+                            title = ?,
+                            location = ?,
+                            description = ?,
+                            content_hash = ?,
+    
+                            revenue_k = ?,
+                            ebitda_k = ?,
+                            profit_margin_pct = ?,
+                            revenue_growth_pct = ?,
+                            leverage_pct = ?,
+    
+                            industry = ?,
+                            sector = ?,
+                            sector_source = 'unclassified',
+                            sector_inference_confidence = ?,
+                            sector_inference_reason = ?,
+    
+                            pdf_drive_url = ?,
+                            drive_folder_id = ?,
+                            drive_folder_url =
+                              'https://drive.google.com/drive/folders/' || ?,
+                            detail_fetched_at = ?,
+                            needs_detail_refresh = 0,
+                            last_updated = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                        """,
+                        (
+                            mv_id,
+                            title,
+                            location,
+                            description,
+                            content_hash,
 
-                        financials.get("revenue_k"),
-                        financials.get("ebitda_k"),
-                        financials.get("profit_margin_pct"),
-                        financials.get("revenue_growth_pct"),
-                        financials.get("leverage_pct"),
+                            revenue_k,
+                            ebitda_k,
+                            profit_margin_pct,
+                            revenue_growth_pct,
+                            leverage_pct,
 
-                        BASE_INDUSTRY,
-                        BASE_SECTOR,
-                        BASE_CONFIDENCE,
-                        BASE_REASON,
+                            BASE_INDUSTRY,
+                            BASE_SECTOR,
+                            BASE_CONFIDENCE,
+                            BASE_REASON,
 
-                        pdf_drive_url,
-                        deal_folder_id,
-                        deal_folder_id,
-                        datetime.utcnow().isoformat(timespec="seconds"),
-                        row_id,
-                    ),
-                )
-                conn.commit()
+                            pdf_drive_url,
+                            deal_folder_id,
+                            deal_folder_id,
+                            datetime.utcnow().isoformat(timespec="seconds"),
+                            row_id,
+                        ),
+                    )
+                    conn.commit()
 
                 print(f"✅ Enriched BFS-{mv_id}")
                 context.close()
