@@ -31,13 +31,16 @@ from src.integrations.sheets_sync import (
     apply_pass_reason_required_formatting,
     apply_left_alignment,
     hide_columns,
-    unhide_all_columns
+    unhide_all_columns,
+    assert_schema_alignment,
+    shrink_columns
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
 SPREADSHEET_ID_Production = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
 WORKSHEET_NAME = "Deals"
 SPREADSHEET_ID_Staging = "1Iioxt688xxw9fVbiixAMGrycwl22GqSh91p4EYsEAH0"
+FULL_REBUILD = True
 
 PIPELINE_ENV = os.getenv("PIPELINE_ENV", "local")  # local | github
 # SHEET_MODE = os.getenv("SHEET_MODE", "test")       # prod | test
@@ -48,7 +51,6 @@ else:
     SPREADSHEET_ID = SPREADSHEET_ID_Staging
 
 DB_PATH = Path("db/deals.sqlite")
-
 
 def sheets_sleep(base=0.3, jitter=0.4):
     time.sleep(base + random.random() * jitter)
@@ -69,50 +71,70 @@ def main():
     # unhide_all_columns(ws)
 
     # 1️⃣ PULL analyst edits FIRST
-    pull_sheets_to_sqlite(
-        repo,
-        ws,
-        columns=DEAL_COLUMNS
-    )
+    pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS)
     sheets_sleep()
+
+    repo.recompute_effective_fields()
     recalculate_financial_metrics()
     sheets_sleep()
-    # 2️⃣ Clean sheet
+
+    # 2️⃣ Optional destructive rebuild
     reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
     sheets_sleep()
-    # Clear all protections
-    # clear_all_protections(ws)
 
-    # 3️⃣ Ensure headers (safe, non-destructive)
+    # 3️⃣ ALWAYS ensure headers (safe)
     ensure_sheet_headers(ws, DEAL_COLUMNS)
+    assert_schema_alignment(repo, ws)
     sheets_sleep()
-    # 4️⃣ Push new deals only
-    rows_written = push_sqlite_to_sheets(repo, ws)
+
+    # 🔒 HARD SAFETY CHECK — FAIL FAST IF ORDER DRIFTS
+    headers = ws.row_values(1)
+    expected = [c.name for c in DEAL_COLUMNS]
+    assert headers == expected, (
+        "❌ Sheet headers do not match DEAL_COLUMNS order.\n"
+        f"Expected: {expected}\n"
+        f"Found:    {headers}"
+    )
+
+    # 4️⃣ Push SQLite → Sheets
+    push_sqlite_to_sheets(repo, ws)
     sheets_sleep()
-    apply_dropdown_validations(ws)  # ← HERE
-    sheets_sleep()
-    # ✅ NOW we know dimensions
-    num_rows = rows_written + 1
+
+    # ✅ Always derive dimensions from sheet, never from rows_written
+    values = ws.get_all_values()
+    num_rows = len(values)
     num_cols = len(DEAL_COLUMNS)
 
-    apply_sheet_formatting(ws)
-    sheets_sleep()
-    apply_base_sheet_formatting(ws)
-    sheets_sleep()
-    clear_sheet_filter(ws)
-    sheets_sleep()
-    clear_all_protections(ws)
-    sheets_sleep()
-    apply_filter_to_used_range(ws, num_rows, num_cols)
-    sheets_sleep()
-    apply_pass_reason_required_formatting(ws)
-    sheets_sleep()
-    apply_left_alignment(ws, ["revenue_k", "ebitda_k"])
-    sheets_sleep()
+    # 5️⃣ Formatting (gate heavy ops)
+    if FULL_REBUILD or num_rows > 0:
+        apply_dropdown_validations(ws)
+        sheets_sleep()
 
-    # 5️⃣ Enrichment / backfills
+        apply_sheet_formatting(ws)
+        sheets_sleep()
+
+        apply_base_sheet_formatting(ws)
+        sheets_sleep()
+
+        clear_sheet_filter(ws)
+        sheets_sleep()
+
+        clear_all_protections(ws)
+        sheets_sleep()
+
+        apply_filter_to_used_range(ws, num_rows, num_cols)
+        sheets_sleep()
+
+        apply_pass_reason_required_formatting(ws)
+        sheets_sleep()
+
+        apply_left_alignment(ws)
+        sheets_sleep()
+
+    # 6️⃣ Backfills (safe, idempotent)
     update_folder_links(repo, ws)
     sheets_sleep()
+
     backfill_system_columns(
         repo,
         ws,
@@ -126,13 +148,17 @@ def main():
             "leverage_pct",
         ]
     )
+    # A = deal_uid, C = source_listing_id
+    shrink_columns(ws, [0, 2], width_px=2)
 
     highlight_analyst_editable_columns(ws)
     sheets_sleep()
-    # hide_columns(ws, [0, 2])  # A = deal_uid, C = source_listing_id
-    protect_system_columns(ws,["burak@sab.partners",
-                               "serdar@sab.partners",
-                               "adrien@sab.partners"])
+
+    protect_system_columns(
+        ws,
+        ["burak@sab.partners", "serdar@sab.partners", "adrien@sab.partners"]
+    )
     sheets_sleep()
+
 if __name__ == "__main__":
     main()

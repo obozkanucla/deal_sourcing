@@ -1107,3 +1107,29 @@ def unhide_all_columns(ws):
         }]
     })
     print("👀 All columns unhidden")
+
+def shrink_columns(ws, col_indices, width_px=2):
+    """
+    Reduce column widths without hiding them.
+    col_indices are 0-based (A=0).
+    """
+    requests = []
+    sheet_id = ws._properties["sheetId"]
+
+    for col in col_indices:
+        requests.append({
+            "updateDimensionProperties": {
+                "range": {
+                    "sheetId": sheet_id,
+                    "dimension": "COLUMNS",
+                    "startIndex": col,
+                    "endIndex": col + 1,
+                },
+                "properties": {
+                    "pixelSize": width_px
+                },
+                "fields": "pixelSize",
+            }
+        })
+
+    ws.spreadsheet.batch_update({"requests": requests})
