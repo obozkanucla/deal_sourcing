@@ -493,7 +493,7 @@ def format_percentage_column(ws, col_idx):
         {
             "numberFormat": {
                 "type": "NUMBER",
-                "pattern": "0.00%"
+                "pattern": "0.00"
             }
         }
     )

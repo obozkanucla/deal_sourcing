@@ -253,7 +253,8 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                                     detail_fetch_reason = 'listing_unavailable',
                                     detail_fetched_at = CURRENT_TIMESTAMP,
                                     needs_detail_refresh = 0,
-                                    last_updated = CURRENT_TIMESTAMP
+                                    last_updated = CURRENT_TIMESTAMP,
+                                    last_updated_source = 'AUTO'
                                 WHERE id = ?
                                   AND (status IS NULL OR status != 'Lost')
                             """,
@@ -275,7 +276,8 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                             SET needs_detail_refresh = 0,
                                 detail_fetch_reason = 'mv_id_not_found',
                                 detail_fetched_at = CURRENT_TIMESTAMP,
-                                last_updated = CURRENT_TIMESTAMP
+                                last_updated = CURRENT_TIMESTAMP,
+                                last_updated_source = 'AUTO'
                             WHERE id = ?
                             """,
                             (row_id,),
@@ -291,7 +293,9 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                             """
                             UPDATE deals
                             SET needs_detail_refresh = 0,
-                                detail_fetch_reason = 'duplicate_mv_id'
+                                detail_fetch_reason = 'duplicate_mv_id',
+                                last_updated = CURRENT_TIMESTAMP,
+                                last_updated_source = 'AUTO'
                             WHERE id = ?
                             """,
                             (row_id,),
@@ -436,7 +440,8 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                               'https://drive.google.com/drive/folders/' || ?,
                             detail_fetched_at = ?,
                             needs_detail_refresh = 0,
-                            last_updated = CURRENT_TIMESTAMP
+                            last_updated = CURRENT_TIMESTAMP,
+                            last_updated_source = 'AUTO'
                         WHERE id = ?
                         """,
                         (
