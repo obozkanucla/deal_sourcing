@@ -83,11 +83,43 @@ def find_existing_mv_owner(conn, mv_id: str, current_row_id: int) -> Optional[in
     ).fetchone()
     return row["id"] if row else None
 
+def _normalize_money_to_k(raw: str | None) -> float | None:
+    if not raw:
+        return None
+
+    s = raw.replace(",", "").strip()
+
+    m = re.search(r"£?\s*([\d\.]+)\s*([mk])?", s, re.I)
+    if not m:
+        return None
+
+    val = float(m.group(1))
+    unit = (m.group(2) or "").lower()
+
+    if unit == "m":
+        return val * 1_000
+    if unit == "k":
+        return val
+
+    # assume absolute number
+    return val / 1_000
+
+
+def _normalize_pct(raw: str | None) -> float | None:
+    if not raw:
+        return None
+
+    m = re.search(r"([\d\.]+)\s*%", raw)
+    if not m:
+        return None
+
+    # IMPORTANT: percentage points, NOT ratio
+    return float(m.group(1))
 
 def extract_b4s_financials(soup: BeautifulSoup) -> dict:
     """
     Extracts broker-declared financials from BusinessesForSale.
-    These are authoritative but NOT EBITDA unless explicitly stated.
+    These are authoritative broker values but NOT analyst overrides.
     """
     out: dict[str, float] = {}
 
@@ -98,32 +130,33 @@ def extract_b4s_financials(soup: BeautifulSoup) -> dict:
             continue
 
         label = dt.get_text(strip=True).lower()
-        value = dd.get_text(strip=True).lower()
+        value = dd.get_text(strip=True)
 
         if "turnover" in label:
-            m = re.search(r"£\s*([\d\.]+)\s*m", value)
-            if m:
-                out["revenue_k"] = float(m.group(1)) * 1_000
-
-        elif "profitability" in label:
-            m = re.search(r"([\d\.]+)\s*%", value)
-            if m:
-                out["profit_margin_pct"] = float(m.group(1)) / 100.0
-
-        elif "growth" in label:
-            m = re.search(r"([\d\.]+)\s*%", value)
-            if m:
-                out["revenue_growth_pct"] = float(m.group(1)) / 100.0
-
-        elif "leverage" in label:
-            m = re.search(r"([\d\.]+)\s*%", value)
-            if m:
-                out["leverage_pct"] = float(m.group(1)) / 100.0
+            revenue_k = _normalize_money_to_k(value)
+            if revenue_k is not None:
+                out["revenue_k"] = revenue_k
 
         elif "ebitda" in label:
-            m = re.search(r"£\s*([\d\.]+)\s*m", value)
-            if m:
-                out["ebitda_k"] = float(m.group(1)) * 1_000
+            ebitda_k = _normalize_money_to_k(value)
+            if ebitda_k is not None:
+                out["ebitda_k"] = ebitda_k
+
+        elif "profitability" in label:
+            # DO NOT assume EBITDA — store as declared margin
+            pct = _normalize_pct(value)
+            if pct is not None:
+                out["profit_margin_pct"] = pct
+
+        elif "growth" in label:
+            pct = _normalize_pct(value)
+            if pct is not None:
+                out["revenue_growth_pct"] = pct
+
+        elif "leverage" in label:
+            pct = _normalize_pct(value)
+            if pct is not None:
+                out["leverage_pct"] = pct
 
     return out
 

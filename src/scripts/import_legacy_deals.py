@@ -164,7 +164,7 @@ def main():
             "asking_price_k": parse_money_k(val("Asking Price / Valuation")),
             "drive_folder_url": val("G-Link URL"),  # ✅ FIXED
             "decision": None,
-            "decision_reason": val("Reason"),
+            "pass_reason": val("Reason"),
         }
 
         if DRY_RUN:

@@ -7,11 +7,11 @@ class ColumnSpec:
     pull: bool
     system: bool = False
     allow_blank_pull: bool = False
-
+    virtual: bool = False
 
 DEAL_COLUMNS = [
     # --- Identity / system ---
-    ColumnSpec("deal_uid", push=True, pull=False, system=True),
+    ColumnSpec("deal_uid", push=True, pull=False, system=True, virtual=True),
     ColumnSpec("source", push=True, pull=False, system=True),
     ColumnSpec("source_listing_id", push=True, pull=False, system=True),
     ColumnSpec("source_url", push=True, pull=False, system=True),
@@ -23,37 +23,60 @@ DEAL_COLUMNS = [
     ColumnSpec("location", push=True, pull=False),
     ColumnSpec("incorporation_year", push=True, pull=False, system=True),
 
+    # --- Assets ---
+    ColumnSpec("drive_folder_url", push=True, pull=False, system=True),
+
+    # --- Derived financial metrics (calculated) ---
+    ColumnSpec("revenue_k_effective", push=True, pull=False, system=True),
+    ColumnSpec("ebitda_k_effective", push=True, pull=False, system=True),
+    ColumnSpec("asking_price_k_effective", push=True, pull=False, system=True),
+
+    # --- Analyst editable financials fields ---
+    ColumnSpec("revenue_k_manual", push=True, pull=True),
+    ColumnSpec("ebitda_k_manual", push=True, pull=True),
+    ColumnSpec("asking_price_k_manual", push=True, pull=True),
+
     # --- Financials (truth from legacy / brokers) ---
     ColumnSpec("revenue_k", push=True, pull=False),
     ColumnSpec("ebitda_k", push=True, pull=False),
     ColumnSpec("asking_price_k", push=True, pull=False),
+
+    # --- Calculated financial metrics (DB truth only) ---
+    ColumnSpec("ebitda_margin", push=True, pull=False, system=True),
+    ColumnSpec("revenue_multiple", push=True, pull=False, system=True),
+    ColumnSpec("ebitda_multiple", push=True, pull=False, system=True),
+
+    # --- Financials (truth from legacy / brokers) ---
     ColumnSpec("profit_margin_pct", push=True, pull=False),
     ColumnSpec("revenue_growth_pct", push=True, pull=False),
     ColumnSpec("leverage_pct", push=True, pull=False),
 
-    # --- Calculated financial metrics (DB truth only) ---
-    ColumnSpec("ebitda_margin", push=True, pull=False, system=False),
-    ColumnSpec("revenue_multiple", push=True, pull=False, system=False),
-    ColumnSpec("ebitda_multiple", push=True, pull=False, system=False),
-
-    # --- Analyst workflow ---
-    ColumnSpec("status", push=True, pull=True),
-    ColumnSpec("owner", push=True, pull=True),
-    ColumnSpec("priority", push=True, pull=True),
-    ColumnSpec("notes", push=True, pull=True),  # ← Legacy “Update”
     ColumnSpec("last_updated_source", push=True, pull=False),
-    ColumnSpec("pass_reason", push=True, pull=True),
-
-    # --- Decisioning ---
-    ColumnSpec("decision", push=True, pull=True),          # ← Legacy “Outcome”
-    ColumnSpec("decision_reason", push=True, pull=True),   # ← Legacy “Reason”
-
     # --- Dates (system) ---
     ColumnSpec("first_seen", push=True, pull=False, system=True),
     ColumnSpec("last_seen", push=True, pull=False, system=True),
     ColumnSpec("last_updated", push=True, pull=False, system=True),
 
-    # --- Assets ---
-    ColumnSpec("drive_folder_url", push=True, pull=False, system=True),
+    # --- Decisioning ---
+    ColumnSpec("decision", push=True, pull=True),
+
+    # --- Analyst workflow ---
+    ColumnSpec("status", push=True, pull=True),
+    ColumnSpec("owner", push=True, pull=True),
+    ColumnSpec("priority", push=True, pull=True),
+    ColumnSpec("notes", push=True, pull=True),
+
+    ColumnSpec("pass_reason", push=True, pull=True)
+
 
 ]
+
+def deal_column_names():
+    return [c.name for c in DEAL_COLUMNS]
+
+
+VIRTUAL_COLUMNS = {"deal_uid"}
+
+
+def sqlite_select_columns():
+    return [c for c in deal_column_names() if c not in VIRTUAL_COLUMNS]

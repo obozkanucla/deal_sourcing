@@ -269,7 +269,6 @@ def main():
                 "priority": None,
                 "notes": None,
                 "decision": decision,
-                "decision_reason": None,
 
                 # -------------------------
                 # Lifecycle

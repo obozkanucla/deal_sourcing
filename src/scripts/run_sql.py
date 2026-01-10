@@ -9,18 +9,20 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    if not column_exists(conn, "deals", "revenue_k_effective"):
-        conn.execute ("ALTER TABLE deals ADD COLUMN revenue_k_effective REAL;")
-    if not column_exists(conn, "deals", "ebitda_k_effective"):
-        conn.execute ("ALTER TABLE deals ADD COLUMN ebitda_k_effective REAL;")
-    if not column_exists(conn, "deals", "asking_price_k_effective"):
-        conn.execute ("ALTER TABLE deals ADD COLUMN asking_price_k_effective REAL;")
-    if not column_exists(conn, "deals", "revenue_k_manual"):
-        conn.execute ("ALTER TABLE deals ADD COLUMN revenue_k_manual REAL;")
-    if not column_exists(conn, "deals", "ebitda_k_manual"):
-        conn.execute ("ALTER TABLE deals ADD COLUMN ebitda_k_manual REAL;")
-    if not column_exists(conn, "deals", "asking_price_k_manual"):
-        conn.execute ("ALTER TABLE deals ADD COLUMN asking_price_k_manual REAL;")
+    conn.execute(f"ALTER TABLE deals DROP COLUMN decision_reason;)")
+    # if not column_exists(conn, "deals", "revenue_k_effective"):
+    #     conn.execute ("ALTER TABLE deals ADD COLUMN revenue_k_effective REAL;")
+    # if not column_exists(conn, "deals", "ebitda_k_effective"):
+    #     conn.execute ("ALTER TABLE deals ADD COLUMN ebitda_k_effective REAL;")
+    # if not column_exists(conn, "deals", "asking_price_k_effective"):
+    #     conn.execute ("ALTER TABLE deals ADD COLUMN asking_price_k_effective REAL;")
+    # if not column_exists(conn, "deals", "revenue_k_manual"):
+    #     conn.execute ("ALTER TABLE deals ADD COLUMN revenue_k_manual REAL;")
+    # if not column_exists(conn, "deals", "ebitda_k_manual"):
+    #     conn.execute ("ALTER TABLE deals ADD COLUMN ebitda_k_manual REAL;")
+    # if not column_exists(conn, "deals", "asking_price_k_manual"):
+    #     conn.execute ("ALTER TABLE deals ADD COLUMN asking_price_k_manual REAL;")
+
     # conn.execute("""
     # UPDATE deals
     #     SET

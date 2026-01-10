@@ -2,6 +2,7 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime, date
 from typing import Optional
+from src.domain.deal_columns import DEAL_COLUMNS, sqlite_select_columns
 
 class SQLiteRepository:
     def __init__(self, db_path: Path):
@@ -11,29 +12,12 @@ class SQLiteRepository:
         print("📀 SQLite DB path:", self.db_path.resolve())
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
-
         self.DEALS_DB_COLUMNS = {
-                                "source",
-                                "source_listing_id",
-                                "source_url",
-                                "title",
-                                "industry",
-                                "sector",
-                                "status",
-                                "owner",
-                                "priority",
-                                "notes",
-                                "first_seen",
-                                "last_seen",
-                                "decision",
-                                "drive_folder_url",
-                                "revenue_k",
-                                "ebitda_k",
-                                "asking_price_k",
-                                "last_updated_source",
-                                "last_updated",
-                                "pass_reason"
-                            }
+            c.name
+            for c in DEAL_COLUMNS
+            if c.pull and not c.system
+        }
+
     def _init_db(self):
         with sqlite3.connect(self.db_path) as conn:
             with open(Path(__file__).parent / "schema.sql") as f:
@@ -253,47 +237,25 @@ class SQLiteRepository:
             ]
 
     def fetch_all_deals(self):
-        conn = self.get_conn()
-        conn.row_factory = sqlite3.Row
-
-        rows = conn.execute(
-            """
-            SELECT             
-                id,
-                source,
-                source_listing_id,
-                source_url,
-                title,
-                industry,
-                sector,
-                status,
-                owner,
-                priority,
-                notes,
-                first_seen,
-                last_seen,
-                last_updated,
-                decision,
-                drive_folder_url,
-                incorporation_year,
-                pass_reason,
-                -- base financials
-                revenue_k,
-                ebitda_k,
-                asking_price_k,
-    
-                -- derived financials
-                ebitda_margin,
-                revenue_multiple,
-                ebitda_multiple,
-                last_updated_source
+        cols = sqlite_select_columns()
+        print(cols)
+        print(", ".join(cols))
+        sql = f"""
+            SELECT {", ".join(cols)}
             FROM deals
             ORDER BY first_seen ASC
-            """
-        ).fetchall()
+        """
 
-        conn.close()
-        return [dict(row) for row in rows]
+        with self.get_conn() as conn:
+            rows = conn.execute(sql).fetchall()
+
+        out = []
+        for row in rows:
+            d = dict(row)
+            d["deal_uid"] = f"{d['source']}:{d['source_listing_id']}"
+            out.append(d)
+
+        return out
 
     def update_human_fields(
             self,
@@ -496,7 +458,6 @@ class SQLiteRepository:
                                    last_updated_source,
                                    status,
                                    decision,
-                                   decision_reason,
                                    notes,
                                    revenue_k,
                                    ebitda_k,
@@ -515,7 +476,6 @@ class SQLiteRepository:
                         'MANUAL',
                         :status,
                         :decision,
-                        :decision_reason,
                         :notes,
                         :revenue_k,
                         :ebitda_k,
@@ -533,7 +493,6 @@ class SQLiteRepository:
 
                     status = excluded.status,
                     decision = excluded.decision,
-                    decision_reason = excluded.decision_reason,
                     notes = excluded.notes,
 
                     revenue_k = excluded.revenue_k,
@@ -751,37 +710,41 @@ class SQLiteRepository:
 
     def recalculate_financial_metrics(self):
         """
-        Recalculate derived financial metrics from canonical stored values.
+        Recalculate derived financial metrics from effective values.
         Safe to run repeatedly.
         """
         with self.get_conn() as conn:
             conn.execute(
                 """
                 UPDATE deals
-                SET ebitda_margin = CASE
-                                        WHEN revenue_k IS NOT NULL
-                                            AND revenue_k != 0
-                    AND ebitda_k IS NOT NULL THEN ROUND((ebitda_k * 100.0) / revenue_k, 2)
-                        ELSE NULL
-                END
-                ,
-
-                    revenue_multiple = CASE
-                        WHEN revenue_k IS NOT NULL
-                         AND revenue_k != 0
-                         AND asking_price_k IS NOT NULL
-                        THEN ROUND(asking_price_k / revenue_k, 2)
-                        ELSE NULL
-                END
-                ,
-
-                    ebitda_multiple = CASE
-                        WHEN ebitda_k IS NOT NULL
-                         AND ebitda_k != 0
-                         AND asking_price_k IS NOT NULL
-                        THEN ROUND(asking_price_k / ebitda_k, 2)
-                        ELSE NULL
-                END
+                    SET
+                        ebitda_margin = CASE
+                            WHEN revenue_k_effective IS NOT NULL
+                             AND revenue_k_effective != 0
+                             AND ebitda_k_effective IS NOT NULL
+                            THEN ROUND((ebitda_k_effective * 100.0) / revenue_k_effective, 2)
+                            ELSE NULL
+                        END,
+                    
+                        revenue_multiple = CASE
+                            WHEN revenue_k_effective IS NOT NULL
+                             AND revenue_k_effective != 0
+                             AND asking_price_k_effective IS NOT NULL
+                            THEN ROUND(asking_price_k_effective / revenue_k_effective, 2)
+                            ELSE NULL
+                        END,
+                    
+                        ebitda_multiple = CASE
+                            WHEN ebitda_k_effective IS NOT NULL
+                             AND ebitda_k_effective != 0
+                             AND asking_price_k_effective IS NOT NULL
+                            THEN ROUND(asking_price_k_effective / ebitda_k_effective, 2)
+                            ELSE NULL
+                        END,
+                    
+                        last_updated = CURRENT_TIMESTAMP,
+                        last_updated_source = 'AUTO'
+                    ;
                 """
             )
             conn.commit()
@@ -895,7 +858,6 @@ class SQLiteRepository:
             "ebitda_multiple",
 
             "decision",
-            "decision_reason",
 
             "first_seen",
             "last_seen",
@@ -936,7 +898,6 @@ class SQLiteRepository:
                     ebitda_multiple = excluded.ebitda_multiple,
 
                     decision = excluded.decision,
-                    decision_reason = excluded.decision_reason,
 
                     last_seen = excluded.last_seen,
                     last_updated = excluded.last_updated,
@@ -974,3 +935,32 @@ class SQLiteRepository:
                     source_listing_id,
                 ),
             )
+
+    def recompute_effective_fields(self):
+        """
+        Recompute effective financial fields.
+        Manual values override broker values.
+        Safe, idempotent, non-destructive.
+        """
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE deals
+                SET revenue_k_effective      =
+                        COALESCE(revenue_k_manual, revenue_k),
+
+                    ebitda_k_effective       =
+                        COALESCE(ebitda_k_manual, ebitda_k),
+
+                    asking_price_k_effective =
+                        COALESCE(asking_price_k_manual, asking_price_k),
+
+                    last_updated             = CURRENT_TIMESTAMP
+                """
+            )
+            conn.commit()
+
+    def get_deals_table_columns(self) -> set[str]:
+        with self.get_conn() as conn:
+            rows = conn.execute("PRAGMA table_info(deals)").fetchall()
+        return {r["name"] for r in rows}

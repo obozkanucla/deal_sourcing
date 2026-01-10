@@ -3,10 +3,10 @@ from typing import Iterable, Set, Tuple
 from src.domain.deal_columns import DEAL_COLUMNS
 from gspread.utils import rowcol_to_a1
 import string
+import random
+from gspread.exceptions import APIError
 
 SHEET_COLUMNS = [c.name for c in DEAL_COLUMNS]
-ALLOWED_COLUMNS = {c.name for c in DEAL_COLUMNS if c.push or c.pull}
-SYSTEM_FIELDS = {c.name for c in DEAL_COLUMNS if c.system}
 DROPDOWNS = {
     "status": [
         "Pass",
@@ -44,6 +44,17 @@ NUMERIC_FIELDS = {
     "revenue_k",
     "ebitda_k",
     "asking_price_k",
+    "revenue_k_effective",
+    "ebitda_k_effective",
+    "asking_price_k_effective",
+    "revenue_growth_pct",
+    "leverage_pct",
+    "revenue_multiple",
+    "ebitda_multiple",
+    "ebitda_margin",
+    "revenue_k_manual",
+    "ebitda_k_manual",
+    "asking_price_k_manual",
 }
 
 STATUS_RULES = {
@@ -61,9 +72,33 @@ STATUS_RULES = {
         "Park": {"red": 1.0, "green": 0.9, "blue": 0.6},
     },
 }
+
 # -----------------------------
 # Helpers
 # -----------------------------
+
+def deal_column_names():
+    return [c.name for c in DEAL_COLUMNS]
+
+def row_from_deal(deal: dict) -> list:
+    """
+    Convert a SQLite deal row (dict) into a Sheets row.
+    Order is strictly defined by DEAL_COLUMNS.
+    """
+    return [deal.get(col.name) for col in DEAL_COLUMNS]
+
+def assert_schema_alignment(repo, ws):
+    sheet_headers = ws.row_values(1)
+    expected = [c.name for c in DEAL_COLUMNS if c.push]
+
+    if sheet_headers != expected:
+        raise RuntimeError(
+            "Sheet / DEAL_COLUMNS mismatch.\n"
+            f"Sheet:   {sheet_headers}\n"
+            f"Expected:{expected}"
+        )
+
+    # extra DB columns are allowed (forward-compatible)
 
 def get_existing_deal_ids(ws) -> set[str]:
     values = ws.col_values(1)  # Column A = deal_uid
@@ -73,28 +108,30 @@ def row_from_deal(deal: dict, columns=DEAL_COLUMNS) -> list:
     row = []
 
     for col in columns:
-        if not col.push:
-            continue
-
+        # --- Virtual column ---
         if col.name == "deal_uid":
             row.append(f"{deal['source']}:{deal['source_listing_id']}")
+            continue
 
-        elif col.name == "drive_folder_url":
+        # --- Pull-only (manual) columns ---
+        if not col.push:
+            row.append("")   # ⬅️ CRITICAL FIX
+            continue
+
+        # --- Special formatting ---
+        if col.name == "drive_folder_url":
             url = deal.get("drive_folder_url")
-            if url:
-                row.append(f'=HYPERLINK("{url}", "Folder")')
-            else:
-                row.append("")
-        elif col.name == "source_url":
+            row.append(f'=HYPERLINK("{url}", "Folder")' if url else "")
+            continue
+
+        if col.name == "source_url":
             url = deal.get("source_url")
-            if url:
-                row.append(f'=HYPERLINK("{url}", "Link to deal")')
-            else:
-                row.append("")
+            row.append(f'=HYPERLINK("{url}", "Link to deal")' if url else "")
+            continue
 
-        else:
-            row.append(deal.get(col.name))
-
+        # --- Normal DB-backed column ---
+        row.append(deal.get(col.name))
+        # print(row)
     return row
 
 def append_rows(ws, rows, chunk_size=200):
@@ -109,9 +146,6 @@ def append_rows(ws, rows, chunk_size=200):
 # -----------------------------
 # Helpers
 # -----------------------------
-import time
-import random
-from gspread.exceptions import APIError
 
 def sheets_write_with_backoff(fn, *, max_retries=5):
     for attempt in range(max_retries):
@@ -125,18 +159,15 @@ def sheets_write_with_backoff(fn, *, max_retries=5):
             time.sleep(sleep)
     raise RuntimeError("Sheets quota exceeded after retries")
 
-
 def ensure_sheet_headers(ws, columns):
     expected = [c.name for c in columns]
 
-    # 🔥 FULL RESET: clear sheet completely
     ws.clear()
-
-    # Resize to exactly 1 row and N columns
     ws.resize(rows=2, cols=len(expected))
-
-    # Write headers
     ws.update("A1", [expected])
+
+    actual = ws.row_values(1)
+    assert actual == expected, "Sheet header mismatch after reset"
 
     print("🧱 Sheet headers reset and written")
 
@@ -145,6 +176,16 @@ def ensure_sheet_headers(ws, columns):
 # -----------------------------
 
 def push_sqlite_to_sheets(repo, ws):
+    headers = ws.row_values(1)
+    expected = deal_column_names()
+    print(headers, expected)
+
+    if headers != expected:
+        raise RuntimeError(
+            "Sheet headers do not match DEAL_COLUMNS.\n"
+            f"Expected: {expected}\n"
+            f"Found:    {headers}"
+        )
     deals = repo.fetch_all_deals()
     existing = get_existing_deal_ids(ws)
 
@@ -154,11 +195,10 @@ def push_sqlite_to_sheets(repo, ws):
         if deal_uid in existing:
             continue
 
-        rows.append(row_from_deal(deal))
+        rows.append(row_from_deal(deal))  # ← THIS IS THE KEY LINE
 
     if rows:
         append_rows(ws, rows)
-    return len(rows)
 
 # -----------------------------
 # PULL: Sheets → SQLite
@@ -175,12 +215,19 @@ def normalize_k(val):
 def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
     """
     Reverse sync: Google Sheets → SQLite
+
+    Rules:
+    - Only columns with pull=True and system=False are considered
+    - Numeric fields are coerced to REAL before comparison
+    - Empty cells map to NULL only if allow_blank_pull=True
+    - Broker / system fields are never touched
     """
 
+    # 🔒 ONLY manual / analyst numeric fields
     NUMERIC_COLUMNS = {
-        "revenue_k",
-        "ebitda_k",
-        "asking_price_k",
+        "revenue_k_manual",
+        "ebitda_k_manual",
+        "asking_price_k_manual",
         "revenue_growth_pct",
         "leverage_pct",
     }
@@ -204,6 +251,7 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
     header_set = set(headers)
     col_idx = {h: i for i, h in enumerate(headers)}
 
+    # ✅ Pullable = analyst-editable only
     pullable_columns = [
         c for c in columns
         if c.pull and not c.system and c.name in header_set
@@ -213,6 +261,7 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
     skipped = 0
 
     for row in rows:
+        # deal_uid is mandatory
         if "deal_uid" not in col_idx:
             continue
 
@@ -224,11 +273,11 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
         try:
             source, source_listing_id = deal_uid.split(":", 1)
         except ValueError:
-            continue
+            continue  # malformed UID
 
         db_deal = repo.fetch_by_source_and_listing(source, source_listing_id)
         if not db_deal:
-            continue
+            continue  # SQLite is source of truth for existence
 
         updates = {}
 
@@ -238,7 +287,9 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
 
             db_val = db_deal.get(col.name)
 
-            # ---------- NUMERIC ----------
+            # ----------------------------
+            # NUMERIC (manual only)
+            # ----------------------------
             if col.name in NUMERIC_COLUMNS:
                 sheet_val = normalize_numeric(raw_val)
 
@@ -247,10 +298,13 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
                         updates[col.name] = None
                     continue
 
-                if sheet_val != db_val:
+                # strict numeric comparison
+                if db_val is None or float(sheet_val) != float(db_val):
                     updates[col.name] = sheet_val
 
-            # ---------- NON-NUMERIC ----------
+            # ----------------------------
+            # NON-NUMERIC
+            # ----------------------------
             else:
                 if raw_val == "":
                     if col.allow_blank_pull and db_val is not None:
@@ -262,6 +316,7 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
 
         if updates:
             updates["last_updated_source"] = "MANUAL"
+
             repo.update_deal_fields(
                 source=source,
                 source_listing_id=source_listing_id,
@@ -276,6 +331,16 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
 # -----------------------------
 # PATCH: Folder links only
 # -----------------------------
+
+
+def col_to_a1(col_idx: int) -> str:
+    col_idx += 1  # 1-based
+    letters = ""
+    while col_idx:
+        col_idx, rem = divmod(col_idx - 1, 26)
+        letters = chr(65 + rem) + letters
+    return letters
+
 
 def update_folder_links(repo, ws):
     """
@@ -324,7 +389,7 @@ def update_folder_links(repo, ws):
             continue
 
         updates.append({
-            "range": f"{ws.title}!{chr(ord('A') + folder_col)}{row_idx}",
+            "range": f"{col_to_a1(folder_col)}{row_idx}",
             "values": [[f'=HYPERLINK("{drive_url}", "Folder")']]
         })
 
@@ -960,7 +1025,7 @@ def _get_col_index(columns, name):
             return i
     return None
 
-def apply_left_alignment(ws, column_names):
+def apply_left_alignment(ws, column_names=NUMERIC_FIELDS):
     spreadsheet = ws.spreadsheet
     sheet_id = ws.id
 
