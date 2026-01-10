@@ -30,17 +30,28 @@ PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
 DETAIL_WAIT_SELECTOR = "#hero, div.teaser-content"
 SLEEP_BETWEEN = (3, 6)
-DRY_RUN = True
+DRY_RUN = False
 
 # Base classification (intentional for B4S)
 BASE_INDUSTRY = "Other"
 BASE_SECTOR = "Miscellaneous"
 BASE_CONFIDENCE = 0.2
 BASE_REASON = "BusinessesForSale base assignment"
+B4S_LOST_PHRASES = [
+    "oops! it looks like the page you were looking for doesn't exist",
+    "page not found",
+    "404",
+    "no longer available",
+]
 
 # -------------------------------------------------
 # HELPERS
 # -------------------------------------------------
+def is_b4s_lost(html: str | None) -> bool:
+    if not html:
+        return False
+    text = html.lower()
+    return any(p in text for p in B4S_LOST_PHRASES)
 
 def text_or_none(el):
     return el.get_text(" ", strip=True) if el else None
@@ -190,7 +201,12 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
             source_listing_id
         FROM deals
         WHERE source = 'BusinessesForSale'
-          AND (needs_detail_refresh = 1 OR detail_fetched_at IS NULL)
+          AND (
+                needs_detail_refresh = 1
+             OR detail_fetched_at IS NULL
+             OR detail_fetched_at < datetime('now', '-14 days')
+              )
+          AND (status IS NULL OR status != 'Lost')
         ORDER BY last_seen DESC
         """
     ).fetchall()
@@ -232,11 +248,14 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                     if not DRY_RUN:
                         conn.execute(
                             """
-                            UPDATE deals
-                            SET status = 'Lost',
-                                needs_detail_refresh = 0,
-                                detail_fetch_reason = 'listing_unavailable'
-                            WHERE id = ?
+                                UPDATE deals
+                                SET status = 'Lost',
+                                    detail_fetch_reason = 'listing_unavailable',
+                                    detail_fetched_at = CURRENT_TIMESTAMP,
+                                    needs_detail_refresh = 0,
+                                    last_updated = CURRENT_TIMESTAMP
+                                WHERE id = ?
+                                  AND (status IS NULL OR status != 'Lost')
                             """,
                             (row_id,),
                         )
@@ -254,7 +273,9 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                             """
                             UPDATE deals
                             SET needs_detail_refresh = 0,
-                                detail_fetch_reason = 'mv_id_not_found'
+                                detail_fetch_reason = 'mv_id_not_found',
+                                detail_fetched_at = CURRENT_TIMESTAMP,
+                                last_updated = CURRENT_TIMESTAMP
                             WHERE id = ?
                             """,
                             (row_id,),

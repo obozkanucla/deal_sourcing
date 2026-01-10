@@ -156,13 +156,9 @@ class SQLiteRepository:
             source: str,
             source_listing_id: str,
             source_url: str | None = None,
-
-            # raw broker truth
             sector_raw: str | None = None,
             location_raw: str | None = None,
             turnover_range_raw: str | None = None,
-
-            # lifecycle
             first_seen: str | None = None,
             last_seen: str | None = None,
             last_updated: str | None = None,
@@ -170,49 +166,77 @@ class SQLiteRepository:
     ):
         now = datetime.utcnow().isoformat(timespec="seconds")
 
-        if source == "BusinessesForSale":
-            conflict = "(source, source_url)"
-        else:
-            conflict = "(source, source_listing_id)"
-
         with self.get_conn() as conn:
-            conn.execute(
-                f"""
-                INSERT INTO deals (source,
-                                   source_listing_id,
-                                   source_url,
-                                   sector_raw,
-                                   location_raw,
-                                   turnover_range_raw,
-                                   first_seen,
-                                   last_seen,
-                                   last_updated,
-                                   last_updated_source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
-                    ON CONFLICT {conflict} DO
-                UPDATE SET
-                    source_url = excluded.source_url,
-                    sector_raw = COALESCE (excluded.sector_raw, deals.sector_raw),
-                    location_raw = COALESCE (excluded.location_raw, deals.location_raw),
-                    turnover_range_raw = COALESCE (excluded.turnover_range_raw, deals.turnover_range_raw),
-                    first_seen = COALESCE (deals.first_seen, excluded.first_seen),
-                    last_seen = excluded.last_seen,
-                    last_updated = excluded.last_updated,
-                    last_updated_source = excluded.last_updated_source;
-                """,
-                (
-                    source,
-                    source_listing_id,
-                    source_url,
-                    sector_raw,
-                    location_raw,
-                    turnover_range_raw,
-                    first_seen,
-                    last_seen,
-                    last_updated or now,
-                    last_updated_source or "AUTO",
-                ),
-            )
+            if source == "BusinessesForSale":
+                # 1️⃣ insert if new (guarded by uniq_b4s_source_url)
+                conn.execute(
+                    """
+                    INSERT
+                    OR IGNORE INTO deals (
+                        source,
+                        source_listing_id,
+                        source_url,
+                        sector_raw,
+                        location_raw,
+                        turnover_range_raw,
+                        first_seen,
+                        last_seen,
+                        last_updated,
+                        last_updated_source
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        source,
+                        source_listing_id,
+                        source_url,
+                        sector_raw,
+                        location_raw,
+                        turnover_range_raw,
+                        first_seen,
+                        last_seen,
+                        last_updated or now,
+                        last_updated_source or "AUTO",
+                    ),
+                )
+
+                # 2️⃣ always update the existing row
+                conn.execute(
+                    """
+                    UPDATE deals
+                    SET source_listing_id   = ?,
+                        sector_raw          = COALESCE(?, sector_raw),
+                        location_raw        = COALESCE(?, location_raw),
+                        turnover_range_raw  = COALESCE(?, turnover_range_raw),
+                        first_seen          = COALESCE(first_seen, ?),
+                        last_seen           = ?,
+                        last_updated        = ?,
+                        last_updated_source = ?
+                    WHERE source = 'BusinessesForSale'
+                      AND source_url = ?
+                    """,
+                    (
+                        source_listing_id,
+                        sector_raw,
+                        location_raw,
+                        turnover_range_raw,
+                        first_seen,
+                        last_seen,
+                        last_updated or now,
+                        last_updated_source or "AUTO",
+                        source_url,
+                    ),
+                )
+
+            else:
+                # keep existing ON CONFLICT logic for other brokers
+                conn.execute(
+                    """
+                    INSERT INTO deals (...)
+                    VALUES (...) ON CONFLICT(source, source_listing_id) DO
+                    UPDATE...
+                    """
+                )
 
     def get_pending_index_records(self, source: str):
         """

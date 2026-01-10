@@ -10,9 +10,7 @@ def column_exists(conn, table, column):
 
 with repo.get_conn() as conn:
     conn.execute("""
-                 CREATE UNIQUE INDEX IF NOT EXISTS uniq_b4s_source_url
-                     ON deals(source, source_url)
-                     WHERE source = 'BusinessesForSale';
+                 ALTER TABLE deals ADD COLUMN detail_fetch_reason TEXT;
                  """)
     # conn.execute(f"-- ALTER TABLE deals ADD COLUMN needs_detail_refresh INTEGER DEFAULT 1;")
     # conn.execute(f"ALTER TABLE deals DROP COLUMN decision_reason;")
