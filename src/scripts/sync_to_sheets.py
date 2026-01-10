@@ -33,7 +33,7 @@ from src.integrations.sheets_sync import (
     hide_columns,
     unhide_all_columns,
     assert_schema_alignment,
-    shrink_columns
+    shrink_columns_by_name
 )
 from src.integrations.sheets_sync import ensure_sheet_headers
 
@@ -149,7 +149,16 @@ def main():
         ]
     )
     # A = deal_uid, C = source_listing_id
-    shrink_columns(ws, [0, 2], width_px=2)
+    shrink_columns_by_name(
+        ws,
+        ["deal_uid", "source_listing_id"],
+        width_px=2
+    )
+    shrink_columns_by_name(
+        ws,
+        ["revenue_k", "ebitda_k", "asking_price_k"],
+        width_px=2
+    )
 
     highlight_analyst_editable_columns(ws)
     sheets_sleep()
