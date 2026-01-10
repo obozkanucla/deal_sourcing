@@ -170,9 +170,14 @@ class SQLiteRepository:
     ):
         now = datetime.utcnow().isoformat(timespec="seconds")
 
+        if source == "BusinessesForSale":
+            conflict = "(source, source_url)"
+        else:
+            conflict = "(source, source_listing_id)"
+
         with self.get_conn() as conn:
             conn.execute(
-                """
+                f"""
                 INSERT INTO deals (source,
                                    source_listing_id,
                                    source_url,
@@ -183,7 +188,8 @@ class SQLiteRepository:
                                    last_seen,
                                    last_updated,
                                    last_updated_source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source, source_listing_id) DO
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) 
+                    ON CONFLICT {conflict} DO
                 UPDATE SET
                     source_url = excluded.source_url,
                     sector_raw = COALESCE (excluded.sector_raw, deals.sector_raw),
