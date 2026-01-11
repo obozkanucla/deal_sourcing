@@ -20,34 +20,6 @@ def normalize_text(text: str) -> str:
 
 
 # ==========================================================
-# MONEY PARSING
-# ==========================================================
-
-def money_to_k(value: str, unit: Optional[str]) -> Optional[int]:
-    """
-    Convert monetary expression to thousands (£k).
-    """
-    try:
-        v = float(value.replace(",", ""))
-    except Exception:
-        return None
-
-    # explicit units
-    if unit == "m":
-        return int(v * 1_000)
-
-    if unit == "k":
-        return int(v)
-
-    # absolute £ amounts
-    if v >= 1_000:
-        return int(v / 1_000)
-
-    # small ambiguous numbers → ignore
-    return None
-
-
-# ==========================================================
 # REGEX PATTERNS
 # ==========================================================
 
@@ -56,26 +28,26 @@ RE_REVENUE = re.compile(
     r"(?:\s*(?:for|of|:|-))?"
     r"(?:\s*(?:ye|fy)?\s*\w*\s*\d{4})?"
     r"\s*£?\s*([\d,]+(?:\.\d+)?)\s*(m|k)?",
-    re.I
+    re.I,
 )
 
 RE_EBITDA = re.compile(
     r"(ebitda)"
     r"(?:\s*(?:of|:|-))?"
     r"\s*£?\s*([\d,]+(?:\.\d+)?)\s*(m|k)?",
-    re.I
+    re.I,
 )
 
 RE_ASKING = re.compile(
     r"(asking price|valuation|offers in excess of|price)"
     r"(?:\s*(?:of|around|approx|:|-))?"
     r"\s*£?\s*([\d,]+(?:\.\d+)?)\s*(m|k)?",
-    re.I
+    re.I,
 )
 
 
 # ==========================================================
-# CONFIDENCE SCORING
+# CONFIDENCE
 # ==========================================================
 
 def confidence_from_match(match_text: str) -> str:
@@ -86,6 +58,34 @@ def confidence_from_match(match_text: str) -> str:
     if "approx" in t:
         return "medium"
     return "low"
+
+
+# ==========================================================
+# MONEY NORMALISATION (SINGLE SOURCE OF TRUTH)
+# ==========================================================
+
+def normalize_from_description(raw: float, unit: Optional[str]) -> Optional[int]:
+    """
+    Convert raw extracted number into £k.
+
+    Rules:
+    - 'm' → millions
+    - 'k' → thousands
+    - no unit:
+        - < £10m → assume absolute pounds
+        - otherwise → discard (too ambiguous)
+    """
+    if unit == "m":
+        return int(raw * 1_000)
+
+    if unit == "k":
+        return int(raw)
+
+    # no unit → absolute pounds heuristic
+    if raw < 10_000_000:
+        return int(raw / 1_000)
+
+    return None
 
 
 # ==========================================================
@@ -113,8 +113,10 @@ def extract_financial_metrics(description: str) -> Dict[str, dict]:
     # Revenue / Turnover
     # --------------------------
     if m := RE_REVENUE.search(text):
-        value = money_to_k(m.group(2), m.group(3))
-        if value:
+        raw = float(m.group(2).replace(",", ""))
+        unit = m.group(3)
+        value = normalize_from_description(raw, unit)
+        if value is not None:
             out["revenue_k"] = {
                 "value": value,
                 "confidence": confidence_from_match(m.group(0)),
@@ -124,8 +126,10 @@ def extract_financial_metrics(description: str) -> Dict[str, dict]:
     # EBITDA
     # --------------------------
     if m := RE_EBITDA.search(text):
-        value = money_to_k(m.group(2), m.group(3))
-        if value:
+        raw = float(m.group(2).replace(",", ""))
+        unit = m.group(3)
+        value = normalize_from_description(raw, unit)
+        if value is not None:
             out["ebitda_k"] = {
                 "value": value,
                 "confidence": confidence_from_match(m.group(0)),
@@ -135,8 +139,10 @@ def extract_financial_metrics(description: str) -> Dict[str, dict]:
     # Asking price / valuation
     # --------------------------
     if m := RE_ASKING.search(text):
-        value = money_to_k(m.group(2), m.group(3))
-        if value:
+        raw = float(m.group(2).replace(",", ""))
+        unit = m.group(3)
+        value = normalize_from_description(raw, unit)
+        if value is not None:
             out["asking_price_k"] = {
                 "value": value,
                 "confidence": confidence_from_match(m.group(0)),

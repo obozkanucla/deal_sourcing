@@ -18,6 +18,7 @@ from src.integrations.google_drive import (
 )
 
 from src.sector_mappings.businessbuyers import map_businessbuyers_sector
+from src.utils.hash_utils import compute_file_hash
 
 # -------------------------------------------------
 # CONFIG
@@ -26,6 +27,7 @@ from src.sector_mappings.businessbuyers import map_businessbuyers_sector
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/bb_pdfs")
 PDF_ROOT.mkdir(parents=True, exist_ok=True)
+BB_EXTRACTION_VERSION = "v1"
 
 # -------------------------------------------------
 # LOST DETECTION
@@ -81,17 +83,17 @@ def _extract_description(soup: BeautifulSoup) -> Optional[str]:
             seen.add(p)
     return "\n".join(clean)
 
-def _extract_price(soup: BeautifulSoup) -> tuple[Optional[str], Optional[float]]:
-    price_el = soup.select_one(".price-ref p")
-    if not price_el:
-        return None, None
-    raw = price_el.get_text(strip=True)
-    m = re.search(r"£\s*([\d,]+)", raw)
+def _extract_price_k(soup: BeautifulSoup) -> Optional[int]:
+    el = soup.select_one(".price-ref p")
+    if not el:
+        return None
+
+    txt = el.get_text(strip=True)
+    m = re.search(r"£\s*([\d,]+)", txt)
     if not m:
-        return None, None
-    price = f"£{m.group(1)}"
-    price_k = float(m.group(1).replace(",", "")) / 1_000
-    return price, price_k
+        return None
+
+    return int(m.group(1).replace(",", "")) // 1_000
 
 # -------------------------------------------------
 # DATABASE HELPER
@@ -125,11 +127,12 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
         SELECT id, source_url, title
         FROM deals
         WHERE source = 'BusinessBuyers'
-          AND (
+            AND (
                 needs_detail_refresh = 1
-                OR description IS NULL
-                OR detail_fetched_at IS NULL
-          )
+             OR detail_fetched_at IS NULL
+             OR detail_fetched_at < datetime('now', '-14 days')
+            )
+            AND (status IS NULL OR status != 'Lost')
         ORDER BY last_seen DESC
         """
     ).fetchall()
@@ -215,7 +218,8 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
                     SET status='Lost',
                         needs_detail_refresh=0,
                         detail_fetch_reason='ref_missing_assumed_lost',
-                        last_updated=CURRENT_TIMESTAMP
+                        last_updated=CURRENT_TIMESTAMP,
+                        last_updated_source='AUTO'
                     WHERE id=?
                     """,
                     (row_id,),
@@ -277,7 +281,7 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
 
             title = _extract_title(soup) or r["title"]
             description = _extract_description(soup)
-            asking_price, asking_price_k = _extract_price(soup)
+            asking_price_k = _extract_price_k(soup)
 
             raw_sector = _extract_raw_sector(soup)
             mapping = map_businessbuyers_sector(raw_sector=raw_sector)
@@ -292,6 +296,7 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
                 parent_folder_id=parent_folder_id,
                 deal_id=deal_identity,
                 deal_title=title,
+                # month_prefix="2512"
             )
 
             pdf_drive_url = upload_pdf_to_drive(
@@ -299,17 +304,19 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
                 filename=f"{ref_id}.pdf",
                 folder_id=deal_folder_id,
             )
+            pdf_hash = compute_file_hash(pdf_path)
 
             record_deal_artifact(
                 conn=conn,
-                deal_id=row_id,
-                broker="BusinessBuyers",
+                source="BusinessBuyers",
+                source_listing_id=ref_id,
+                deal_id=row_id,  # optional, fine to pass
                 artifact_type="pdf",
                 artifact_name=f"{ref_id}.pdf",
+                artifact_hash=pdf_hash,
                 drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
                 drive_url=pdf_drive_url,
-                industry=mapping["industry"],
-                sector=mapping["sector"],
+                extraction_version=BB_EXTRACTION_VERSION,
                 created_by="enrich_businessbuyers.py",
             )
 
@@ -318,39 +325,49 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
             conn.execute(
                 """
                 UPDATE deals
-                SET source_listing_id=?,
-                    title=?,
-                    description=?,
-                    asking_price=?,
-                    asking_price_k=?,
-                    industry=?,
-                    sector=?,
-                    sector_source=?,
-                    sector_inference_confidence=?,
-                    sector_inference_reason=?,
-                    drive_folder_id=?,
-                    drive_folder_url='https://drive.google.com/drive/folders/' || ?,
-                    pdf_drive_url=?,
-                    detail_fetched_at=?,
-                    needs_detail_refresh=0,
-                    detail_fetch_reason=NULL,
-                    last_updated=CURRENT_TIMESTAMP
-                WHERE id=?
+                SET source_listing_id           = ?,
+                    title                       = ?,
+                    description                 = ?,
+
+                    asking_price_k = CASE
+                        WHEN asking_price_k IS NULL THEN ?
+                        ELSE asking_price_k
+                    END,
+                    revenue_k                   = NULL,
+                    ebitda_k                    = NULL,
+
+                    industry                    = ?,
+                    sector                      = ?,
+                    sector_source               = ?,
+                    sector_inference_confidence = ?,
+                    sector_inference_reason     = ?,
+
+                    drive_folder_id             = ?,
+                    drive_folder_url            = 'https://drive.google.com/drive/folders/' || ?,
+                    pdf_drive_url               = ?,
+
+                    detail_fetched_at           = ?,
+                    needs_detail_refresh        = 0,
+                    last_updated                = CURRENT_TIMESTAMP,
+                    last_updated_source         = 'AUTO'
+                WHERE id = ?
                 """,
                 (
                     ref_id,
                     title,
                     description,
-                    asking_price,
                     asking_price_k,
+
                     mapping["industry"],
                     mapping["sector"],
                     sector_source,
                     mapping["confidence"],
                     mapping["reason"],
+
                     deal_folder_id,
                     deal_folder_id,
                     pdf_drive_url,
+
                     datetime.utcnow().isoformat(timespec="seconds"),
                     row_id,
                 ),

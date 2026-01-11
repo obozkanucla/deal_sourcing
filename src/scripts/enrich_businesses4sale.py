@@ -19,6 +19,7 @@ from src.integrations.google_drive import (
     find_or_create_deal_folder,
     upload_pdf_to_drive,
 )
+from src.utils.financial_normalization import _normalize_money_to_k, _normalize_pct, normalize_from_description
 
 # -------------------------------------------------
 # CONFIG
@@ -80,7 +81,6 @@ def compute_content_hash(*parts: str | None) -> str:
             h.update(p.encode("utf-8"))
     return h.hexdigest()
 
-
 def find_existing_mv_owner(conn, mv_id: str, current_row_id: int) -> Optional[int]:
     row = conn.execute(
         """
@@ -93,39 +93,6 @@ def find_existing_mv_owner(conn, mv_id: str, current_row_id: int) -> Optional[in
         (mv_id, current_row_id),
     ).fetchone()
     return row["id"] if row else None
-
-def _normalize_money_to_k(raw: str | None) -> float | None:
-    if not raw:
-        return None
-
-    s = raw.replace(",", "").strip()
-
-    m = re.search(r"£?\s*([\d\.]+)\s*([mk])?", s, re.I)
-    if not m:
-        return None
-
-    val = float(m.group(1))
-    unit = (m.group(2) or "").lower()
-
-    if unit == "m":
-        return val * 1_000
-    if unit == "k":
-        return val
-
-    # assume absolute number
-    return val / 1_000
-
-
-def _normalize_pct(raw: str | None) -> float | None:
-    if not raw:
-        return None
-
-    m = re.search(r"([\d\.]+)\s*%", raw)
-    if not m:
-        return None
-
-    # IMPORTANT: percentage points, NOT ratio
-    return float(m.group(1))
 
 def extract_b4s_financials(soup: BeautifulSoup) -> dict:
     facts = {}

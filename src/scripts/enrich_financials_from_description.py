@@ -1,3 +1,5 @@
+#enrich_financials_from_description.py
+
 from pathlib import Path
 from src.persistence.repository import SQLiteRepository
 from src.enrichment.financial_extractor import extract_financial_metrics

@@ -26,13 +26,19 @@ def find_or_create_deal_folder(
     parent_folder_id: str,
     deal_id: str,
     deal_title: str | None = None,
+    month_prefix: str | None = None,
 ) -> str:
     service = get_drive_service()
 
     if not deal_id:
         raise RuntimeError("deal_id is required")
 
-    month_prefix = datetime.utcnow().strftime("%y%m")
+    # ---- MONTH PREFIX ----
+    if month_prefix is None:
+        month_prefix = datetime.utcnow().strftime("%y%m")
+
+    # Defensive: ensure format stays sane if overridden
+    month_prefix = month_prefix.strip()
 
     # ---- SAFE TITLE ----
     safe_title = (deal_title or "").strip()

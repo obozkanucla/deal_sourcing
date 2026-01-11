@@ -1,40 +1,44 @@
 def record_deal_artifact(
     *,
     conn,
-    deal_id: int,
-    broker: str,
+    source: str,
+    source_listing_id: str,
     artifact_type: str,
     artifact_name: str,
-    drive_file_id: str | None,
+    artifact_hash: str,
+    drive_file_id: str,
     drive_url: str,
-    industry: str | None,
-    sector: str | None,
     created_by: str,
+    extraction_version: str | None = None,
+    deal_id: int | None = None,
 ):
     conn.execute(
         """
-        INSERT INTO deal_artifacts (
+        INSERT OR IGNORE INTO deal_artifacts (
+            source,
+            source_listing_id,
             deal_id,
-            broker,
             artifact_type,
             artifact_name,
+            artifact_hash,
             drive_file_id,
             drive_url,
-            industry_at_create,
-            sector_at_create,
-            created_by
+            created_at,
+            created_by,
+            extraction_version
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
         """,
         (
+            source,
+            source_listing_id,
             deal_id,
-            broker,
             artifact_type,
             artifact_name,
+            artifact_hash,
             drive_file_id,
             drive_url,
-            industry,
-            sector,
             created_by,
+            extraction_version,
         ),
     )

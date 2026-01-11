@@ -13,6 +13,7 @@ from src.integrations.google_drive import (
 )
 from src.sector_mappings.axis import infer_axis_industry_sector
 from src.persistence.deal_artifacts import record_deal_artifact
+from src.utils.hash_utils import compute_file_hash
 
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/axis_pdfs")
@@ -118,10 +119,11 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
         WHERE source = 'AxisPartnership'
           AND (
                 needs_detail_refresh = 1
-                OR description IS NULL
-                OR detail_fetched_at IS NULL
-          )
-        ORDER BY source_listing_id
+             OR detail_fetched_at IS NULL
+             OR detail_fetched_at < datetime('now', '-14 days')
+              )
+          AND (status IS NULL OR status != 'Lost')
+        ORDER BY source_listing_id;
         """
     ).fetchall()
 
@@ -177,6 +179,7 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
                 deal_id=str(listing_id),
                 deal_title=title,
             )
+            pdf_hash = compute_file_hash(pdf_path)
 
             pdf_drive_url = upload_pdf_to_drive(
                 local_path=str(pdf_path),
@@ -185,18 +188,19 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
             )
 
             drive_file_id = pdf_drive_url.split("/d/")[1].split("/")[0]
-
+            AXIS_EXTRACTION_VERSION = "v1"
             record_deal_artifact(
                 conn=conn,
-                deal_id=row_id,
-                broker="AxisPartnership",  # or Knightsbridge
+                source="AxisPartnership",
+                source_listing_id=str(listing_id),
+                deal_id=row_id,  # optional
                 artifact_type="pdf",
                 artifact_name=f"{listing_id}.pdf",
+                artifact_hash=pdf_hash,
                 drive_file_id=drive_file_id,
                 drive_url=pdf_drive_url,
-                industry=mapping["industry"],
-                sector=mapping["sector"],
                 created_by="enrich_axispartnership.py",
+                extraction_version=AXIS_EXTRACTION_VERSION,
             )
 
             pdf_path.unlink(missing_ok=True)
@@ -218,12 +222,12 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
                     drive_folder_url            =
                         'https://drive.google.com/drive/folders/' || ?,
                     pdf_drive_url               = ?,
-                    pdf_path                    = NULL,
 
                     detail_fetched_at           = ?,
                     needs_detail_refresh        = 0,
                     detail_fetch_reason         = NULL,
-                    last_updated                = CURRENT_TIMESTAMP
+                    last_updated                = CURRENT_TIMESTAMP,
+                    last_updated_source         = 'AUTO'
                 WHERE id = ?
                 """,
                 (
@@ -256,7 +260,6 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
         conn.close()
 
     print("\n🏁 Axis detail enrichment complete")
-
 
 if __name__ == "__main__":
     enrich_axispartnership()
