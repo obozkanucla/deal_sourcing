@@ -10,7 +10,58 @@ def column_exists(conn, table, column):
 
 with repo.get_conn() as conn:
     conn.execute("""
-                 ALTER TABLE deals ADD COLUMN detail_fetch_reason TEXT;
+                    UPDATE deals
+                    SET last_updated_source = 'AUTO'
+                    WHERE source = 'AxisPartnership'
+                      AND detail_fetched_at IS NOT NULL
+                      AND last_updated_source IS NULL;
+                """)
+    conn.execute("""UPDATE deals
+                    SET last_updated_source = 'AUTO'
+                    WHERE source = 'BusinessesForSale'
+                      AND detail_fetched_at IS NOT NULL
+                      AND last_updated_source IS NULL;
+                """)
+    conn.execute("""DROP TABLE IF EXISTS deal_artifacts;""")
+    conn.execute("""CREATE TABLE deal_artifacts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                
+                    -- canonical broker identity (AUTHORITATIVE)
+                    source               TEXT NOT NULL,
+                    source_listing_id    TEXT NOT NULL,
+                
+                    -- optional convenience pointer (NON-AUTHORITATIVE)
+                    deal_id              INTEGER NULL,
+                
+                    -- artifact identity
+                    artifact_type        TEXT NOT NULL,     -- pdf, html, snapshot
+                    artifact_name        TEXT NOT NULL,
+                    artifact_hash        TEXT NOT NULL,
+                
+                    -- storage
+                    drive_file_id        TEXT NOT NULL,
+                    drive_url            TEXT NOT NULL,
+                
+                    -- provenance
+                    created_at           DATETIME NOT NULL,
+                    created_by           TEXT NOT NULL,
+                    extraction_version   TEXT NULL,
+                
+                    -- safety
+                    UNIQUE (
+                        source,
+                        source_listing_id,
+                        artifact_type,
+                        artifact_hash
+                    )
+                );""")
+    conn.execute("""
+                 CREATE INDEX idx_artifacts_lookup
+                     ON deal_artifacts(source, source_listing_id);
+        """)
+    conn.execute("""
+                 CREATE UNIQUE INDEX IF NOT EXISTS uniq_artifact_hash
+                     ON deal_artifacts(artifact_hash);
                  """)
     # conn.execute(f"-- ALTER TABLE deals ADD COLUMN needs_detail_refresh INTEGER DEFAULT 1;")
     # conn.execute(f"ALTER TABLE deals DROP COLUMN decision_reason;")
