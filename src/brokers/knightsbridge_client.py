@@ -3,7 +3,9 @@ import random
 import re
 import os
 from playwright.sync_api import sync_playwright
+from src.config import KB_USERNAME, KB_PASSWORD
 
+KNIGHTSBRIDGE_BASE = "https://www.knightsbridgeplc.com"
 
 
 class KnightsbridgeClient:
@@ -72,6 +74,14 @@ class KnightsbridgeClient:
     BASE_SLEEP = 1.2
     JITTER = 0.8
 
+    RESTART_EVERY = 50
+    BASE_SLEEP = 1.2
+    JITTER = 0.8
+
+    if not KB_USERNAME or not KB_PASSWORD:
+        raise RuntimeError("KB_USERNAME / KB_PASSWORD not set")
+
+
     # Proven sector values
     def __init__(self):
         self.browser = None
@@ -85,7 +95,7 @@ class KnightsbridgeClient:
     def start(self):
         print("🚀 Starting Knightsbridge client")
         self._playwright = sync_playwright().start()
-        self.browser = self._playwright.chromium.launch(headless=self.HEADLESS)
+        self.browser = self._playwright.chromium.launch(headless=os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1")
         self.page = self.browser.new_page()
 
     def stop(self):
@@ -94,6 +104,19 @@ class KnightsbridgeClient:
             self.browser.close()
         if self._playwright:
             self._playwright.stop()
+
+    def login(self):
+        print("🔐 Logging into Knightsbridge")
+        self.page.goto(f"{KNIGHTSBRIDGE_BASE}/login/", wait_until="domcontentloaded")
+        self.page.fill("#LoginEmail", KB_USERNAME)
+        self.page.fill("#LoginPassword", KB_PASSWORD)
+        self.page.evaluate("LoginUser('#ContentPlaceHolder1_ctl09')")
+        self.page.wait_for_timeout(3000)
+
+        if self.page.locator("text=Logout").count() == 0:
+            raise RuntimeError("Knightsbridge login failed")
+
+        print("✅ Logged in successfully")
 
     def _human_sleep(self, min_extra=0.0):
         time.sleep(self.BASE_SLEEP + min_extra + random.random() * self.JITTER)

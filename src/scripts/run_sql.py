@@ -9,7 +9,10 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute(""" ALTER TABLE deals ADD COLUMN detail_fetch_reason TEXT;""")
+    conn.execute("""ALTER TABLE deals ADD COLUMN lost_reason TEXT;""")
+
+    # conn.execute(""" ALTER TABLE deals
+    #     ADD COLUMN detail_fetch_reason TEXT;""")
     # conn.execute("""
     #                 UPDATE deals
     #                 SET last_updated_source = 'AUTO'

@@ -166,12 +166,12 @@ class AxisPartnershipClient:
         # ----------------------------------------------------------
         # ASKING PRICE
         # ----------------------------------------------------------
-        asking_price = None
+        asking_price_k = None
         price_el = soup.select_one(".cz_post_data.cz_data_custom_meta i.czico-071-money-3")
         if price_el:
             parent = price_el.find_parent("span")
             if parent:
-                asking_price = parent.get_text(strip=True)
+                asking_price_k = parent.get_text(strip=True)
 
         # ----------------------------------------------------------
         # LOCATION
@@ -224,14 +224,14 @@ class AxisPartnershipClient:
         # ----------------------------------------------------------
         facts = {}
 
-        if asking_price:
-            facts["asking_price"] = asking_price
+        if asking_price_k:
+            facts["asking_price_k"] = asking_price_k
         if location:
             facts["location"] = location
         if turnover:
-            facts["turnover"] = turnover
+            facts["revenue_k"] = turnover
         if ebitda:
-            facts["ebitda"] = ebitda
+            facts["ebitda_k"] = ebitda
         if status:
             facts["status"] = status
 
