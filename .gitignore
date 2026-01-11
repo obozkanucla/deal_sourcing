@@ -15,4 +15,4 @@ db/deals_pre_reset_*.sqlite
 
 .env
 .env.*
-*.env
+*.env.env
