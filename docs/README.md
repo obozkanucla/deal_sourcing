@@ -1,9 +1,3 @@
-Absolutely — this is a very good moment to crystallise the system. Below are production-grade, posterity-oriented documents, written to be dropped directly into your repo as Markdown.
-
-I’ll give you three sections, each ready to be saved as its own .md file.
-
-⸻
-
 1️⃣ README.md — Project Architecture & Design Record
 
 # Deal Sourcing & Intelligence Platform
