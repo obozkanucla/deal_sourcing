@@ -39,10 +39,19 @@ JITTER = 0.8
 if not KB_USERNAME or not KB_PASSWORD:
     raise RuntimeError("KB_USERNAME / KB_PASSWORD not set")
 
+DRY_RUN = False
 
 # ---------------------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------------------
+def is_knightsbridge_lost_page(page) -> bool:
+    text = page.content().lower()
+    return (
+        "business no longer exists" in text
+        or "this business is no longer available" in text
+        or "listing not found" in text
+    )
+
 
 def has_lost_text(page) -> bool:
     text = page.content().lower()
@@ -62,15 +71,11 @@ def assert_knightsbridge_not_lost(page, response):
     if response.status in (404, 410):
         raise RuntimeError("LISTING_LOST_HTTP")
 
-    url = page.url.lower()
-    if "login" in url:
-        raise RuntimeError("LISTING_LOST_LOGIN_REDIRECT")
-
-    if page.locator("#BusinessDetails").count() == 0:
+    if is_knightsbridge_lost_page(page):
         raise RuntimeError("LISTING_LOST_DOM")
 
-    if has_lost_text(page):
-        raise RuntimeError("LISTING_LOST_TEXT")
+    if "login" in page.url.lower():
+        raise RuntimeError("LISTING_LOST_LOGIN_REDIRECT")
 
 def _sleep(extra: float = 0.0):
     time.sleep(BASE_SLEEP + extra + (JITTER * os.urandom(1)[0] / 255))
@@ -173,6 +178,10 @@ def enrich_knightsbridge(limit: Optional[int] = None):
             id,
             title,
             sector_raw,
+            industry,
+            sector,
+            sector_inference_confidence,
+            sector_inference_reason,
             source_listing_id,
             source_url,
             description,
@@ -180,12 +189,11 @@ def enrich_knightsbridge(limit: Optional[int] = None):
             pdf_drive_url
         FROM deals
         WHERE source = 'Knightsbridge'
-          AND (
-                needs_detail_refresh = 1
-                OR detail_fetched_at IS NULL
-                OR description IS NULL
-                OR pdf_drive_url IS NULL
-              )
+            AND (
+                  needs_detail_refresh = 1
+               OR detail_fetched_at IS NULL
+               OR detail_fetched_at < DATETIME('now', '-14 days')
+            )
         ORDER BY source_listing_id
         """
     ).fetchall()
@@ -205,6 +213,8 @@ def enrich_knightsbridge(limit: Optional[int] = None):
 
     try:
         for r in rows:
+            error: Exception | None = None
+            success = False
             row_id = r["id"]
             listing_id = r["source_listing_id"]
             url        = r["source_url"]
@@ -224,10 +234,17 @@ def enrich_knightsbridge(limit: Optional[int] = None):
 
             try:
                 response = goto_with_retry(client.page,full_url)
-                assert_knightsbridge_not_lost(client.page, response)
 
-                client.page.wait_for_selector("#BusinessDetails", timeout=15_000)
-                _sleep(0.6)
+                try:
+                    client.page.wait_for_selector("#BusinessDetails", timeout=15_000)
+                except PlaywrightTimeout:
+                    print("PlaywrightTimeout waiting for #BusinessDetails")
+                    # Only now can we evaluate LOST
+                    client.page.reload(wait_until="domcontentloaded")
+                    try:
+                        client.page.wait_for_selector("#BusinessDetails", timeout=10_000)
+                    except PlaywrightTimeout:
+                        raise RuntimeError("LISTING_LOST_DOM_TIMEOUT")
 
                 description = _extract_description(client.page)
                 asking_price_k = _extract_asking_price_k(client.page)
@@ -236,10 +253,20 @@ def enrich_knightsbridge(limit: Optional[int] = None):
 
                 pdf_path = PDF_ROOT / f"{listing_id}.pdf"
                 client.page.pdf(path=str(pdf_path), format="A4", print_background=True)
+                industry = r["industry"]
+                sector = r["sector"]
+                sector_confidence = r["sector_inference_confidence"] or 1.0
+                sector_reason = r["sector_inference_reason"] or "legacy_broker_mapping"
 
-                mapping = KNIGHTSBRIDGE_SECTOR_MAP[sector_raw]
-                industry = mapping["industry"]
-                sector   = mapping["sector"]
+                if not industry or not sector:
+                    raise RuntimeError("MISSING_SECTOR_CANONICAL")
+
+                # Knightsbridge sector is broker-declared at index time.
+                # Enrichment must never infer or override it.
+                assert industry and sector
+
+                if not industry or not sector:
+                    raise RuntimeError("MISSING_SECTOR_CANONICAL")
 
                 parent_folder_id = get_drive_parent_folder_id(
                     industry=industry,
@@ -293,85 +320,126 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                     )
                 fetched_at = datetime.utcnow().isoformat(timespec="seconds")
                 drive_folder_url = f"https://drive.google.com/drive/folders/{deal_folder_id}"
+                if DRY_RUN:
+                    print("DRY_RUN → would UPDATE deals:", row_id)
+                    print("Price:", asking_price_k)
 
-                cur = conn.execute(
-                    """
-                    UPDATE deals
-                     SET
-                        description                 = ?,
-                        asking_price_k              = COALESCE(asking_price_k, ?),
-                    
-                        industry                    = ?,
-                        sector                      = ?,
-                        sector_source               = 'broker',
-                        sector_inference_confidence = ?,
-                        sector_inference_reason     = ?,
-                    
-                        drive_folder_id             = ?,
-                        drive_folder_url            = ?,
-                        pdf_drive_url               = ?,
-                    
-                        detail_fetched_at           = ?,
-                        needs_detail_refresh        = 0,
-                        detail_fetch_reason         = NULL,
-                        last_updated                = CURRENT_TIMESTAMP,
-                        last_updated_source         = 'AUTO'
-                    WHERE id = ?
-                    """,
-                    (
-                        description,
-                        asking_price_k,
-                        industry,
-                        sector,
-                        mapping["confidence"],
-                        mapping["reason"],
-                        deal_folder_id,
-                        drive_folder_url,
-                        pdf_drive_url,
-                        fetched_at,
-                        row_id,
-                    )
-                )
-                if cur.rowcount != 1:
-                    raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
-                conn.commit()
-
-                print("✅ Enriched + uploaded")
-
-            except Exception as e:
-                reason = str(e)
-                if "LISTING_LOST" in reason:
-                    lost_reason = reason
-                    conn.execute(
+                    print("URL:", client.page.url)
+                    print("HTTP status:", response.status if response else None)
+                    print("Title:", client.page.title())
+                    print("Body snippet:", client.page.content()[:500])
+                    client.page.screenshot(path=f"/tmp/kb_{listing_id}.png")
+                    success = True
+                else:
+                    cur = conn.execute(
                         """
                         UPDATE deals
-                        SET status               = 'Lost',
-                            lost_reason          = ?,
-                            needs_detail_refresh = 0,
-                            last_updated         = CURRENT_TIMESTAMP,
-                            detail_fetched_at    = CURRENT_TIMESTAMP,
-                            last_updated_source  = 'AUTO'
+                         SET
+                            description                 = ?,
+                            asking_price_k              = COALESCE(asking_price_k, ?),
+                        
+                            industry                    = ?,
+                            sector                      = ?,
+                            sector_source               = 'broker',
+                            sector_inference_confidence = ?,
+                            sector_inference_reason     = ?,
+                        
+                            drive_folder_id             = ?,
+                            drive_folder_url            = ?,
+                            pdf_drive_url               = ?,
+                        
+                            detail_fetched_at           = ?,
+                            needs_detail_refresh        = 0,
+                            detail_fetch_reason         = NULL,
+                            last_updated                = CURRENT_TIMESTAMP,
+                            last_updated_source         = 'AUTO'
                         WHERE id = ?
                         """,
-                        (lost_reason, row_id,),
+                        (
+                            description,
+                            asking_price_k,
+                            industry,
+                            sector,
+                            sector_confidence,
+                            sector_reason,
+                            deal_folder_id,
+                            drive_folder_url,
+                            pdf_drive_url,
+                            fetched_at,
+                            row_id,
+                        )
                     )
+                    if cur.rowcount != 1:
+                        raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
                     conn.commit()
-                    print(f"🗑️ Marked Knightsbridge {listing_id} as LOST")
+
+                    print("✅ Enriched + uploaded")
+                    success = True
+            except Exception as exc:
+                error = exc
+                reason = str(exc) if exc else "UNKNOWN_EXCEPTION"
+                print("EXCEPTION STR:", reason)
+                if success:
+                    # This was a clean DRY_RUN or successful write
                     continue
-                cur = conn.execute(
-                    """
-                    UPDATE deals
-                    SET needs_detail_refresh = 1,
-                        detail_fetch_reason = ?,
-                        last_updated_source = 'AUTO'
-                    WHERE id = ?
-                    """,
-                    (str(e)[:500], row_id),
-                )
-                if cur.rowcount != 1:
-                    raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
-                conn.commit()
-                print(f"❌ Error: {e}")
+                if reason == "MISSING_SECTOR_CANONICAL":
+                    if DRY_RUN:
+                        print("DRY_RUN → would park deal due to missing canonical sector:", row_id)
+                    else:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET detail_fetched_at    = CURRENT_TIMESTAMP,
+                                needs_detail_refresh = 0,
+                                detail_fetch_reason  = 'MISSING_SECTOR_CANONICAL',
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?
+                            """,
+                            (row_id,),
+                        )
+                        conn.commit()
+                    continue
+                if "LISTING_LOST" in reason:
+                    lost_reason = reason
+                    if DRY_RUN:
+                        print("DRY_RUN → would UPDATE deals:", row_id)
+                    else:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET status               = 'Lost',
+                                lost_reason          = ?,
+                                needs_detail_refresh = 0,
+                                last_updated         = CURRENT_TIMESTAMP,
+                                detail_fetched_at    = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?
+                            """,
+                            (lost_reason, row_id,),
+                        )
+                        conn.commit()
+                        print(f"🗑️ Marked Knightsbridge {listing_id} as LOST")
+                        success = True
+                    continue
+                if DRY_RUN:
+                    print("DRY_RUN → would UPDATE deals:", row_id)
+                else:
+                    cur = conn.execute(
+                        """
+                        UPDATE deals
+                        SET needs_detail_refresh = 1,
+                            detail_fetch_reason = ?,
+                            last_updated_source = 'AUTO'
+                        WHERE id = ?
+                        """,
+                        (reason[:500], row_id),
+                    )
+                    if cur.rowcount != 1:
+                        raise RuntimeError(f"Expected 1 row, got {cur.rowcount}")
+                    conn.commit()
+                    success = True
+                print(f"❌ Error: {reason}")
 
     finally:
         client.stop()

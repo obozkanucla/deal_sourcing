@@ -20,6 +20,7 @@ from src.integrations.google_drive import (
     upload_pdf_to_drive,
 )
 from src.utils.financial_normalization import _normalize_money_to_k, _normalize_pct, normalize_from_description
+from src.utils.hash_utils import compute_file_hash
 
 # -------------------------------------------------
 # CONFIG
@@ -45,6 +46,7 @@ B4S_LOST_PHRASES = [
     "no longer available",
 ]
 
+B4S_EXTRACTION_VERSION = 'v1'
 # -------------------------------------------------
 # HELPERS
 # -------------------------------------------------
@@ -72,14 +74,6 @@ def extract_mv_id(soup: BeautifulSoup) -> Optional[str]:
         return None
     m = re.search(r"\b(MV\d+)\b", p.get_text(strip=True))
     return m.group(1) if m else None
-
-
-def compute_content_hash(*parts: str | None) -> str:
-    h = hashlib.sha256()
-    for p in parts:
-        if p:
-            h.update(p.encode("utf-8"))
-    return h.hexdigest()
 
 def find_existing_mv_owner(conn, mv_id: str, current_row_id: int) -> Optional[int]:
     row = conn.execute(
@@ -356,25 +350,39 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                         deal_id=f"BFS-{mv_id}",
                         deal_title=title,
                     )
+                    pdf_hash = compute_file_hash(pdf_path)
 
                     pdf_drive_url = upload_pdf_to_drive(
                         local_path=pdf_path,
                         filename=f"{mv_id}.pdf",
                         folder_id=deal_folder_id,
                     )
+                    existing = conn.execute(
+                        """
+                        SELECT 1
+                        FROM deal_artifacts
+                        WHERE deal_id = ?
+                          AND artifact_hash = ?
+                          AND artifact_type = 'pdf'
+                        """,
+                        (row_id, pdf_hash),
+                    ).fetchone()
+                    deal_identity = f"B4S-{mv_id}"
 
-                    record_deal_artifact(
-                        conn=conn,
-                        deal_id=row_id,
-                        broker="BusinessesForSale",
-                        artifact_type="pdf",
-                        artifact_name=f"{mv_id}.pdf",
-                        drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
-                        drive_url=pdf_drive_url,
-                        industry=BASE_INDUSTRY,
-                        sector=BASE_SECTOR,
-                        created_by="enrich_businesses4sale.py",
-                    )
+                    if not existing:
+                        record_deal_artifact(
+                            conn=conn,
+                            source="BusinessesForSale",
+                            source_listing_id=mv_id,
+                            deal_id=row_id,
+                            artifact_type="pdf",
+                            artifact_name=f"{mv_id}.pdf",
+                            artifact_hash=pdf_hash,
+                            drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
+                            drive_url=pdf_drive_url,
+                            extraction_version=B4S_EXTRACTION_VERSION,
+                            created_by="enrich_businesses4sale.py",
+                        )
 
                     pdf_path.unlink(missing_ok=True)
 
@@ -383,7 +391,10 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                         """
                         UPDATE deals
                         SET
-                            source_listing_id = ?,
+                            source_listing_id = CASE
+                                WHEN source_listing_id IS NULL THEN ?
+                                ELSE source_listing_id
+                            END,
                             title = ?,
                             location = ?,
                             description = ?,
