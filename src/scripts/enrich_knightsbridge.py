@@ -26,7 +26,7 @@ from src.persistence.repository import SQLiteRepository
 # ---------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------
-repo = SQLiteRepository()
+repo = SQLiteRepository(Path("db/deals.sqlite"))
 KNIGHTSBRIDGE_EXTRACTION_VERSION = "v1"
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/knightsbridge_pdfs")

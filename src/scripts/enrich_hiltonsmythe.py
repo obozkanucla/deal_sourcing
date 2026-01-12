@@ -22,7 +22,7 @@ from src.persistence.repository import SQLiteRepository
 # ---------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------
-repo = SQLiteRepository()
+repo = SQLiteRepository(Path("db/deals.sqlite"))
 HS_EXTRACTION_VERSION = "v1"
 BROKER = "HiltonSmythe"
 

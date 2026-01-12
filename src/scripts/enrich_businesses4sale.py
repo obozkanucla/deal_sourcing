@@ -151,7 +151,7 @@ def extract_b4s_financials(soup: BeautifulSoup) -> dict:
 def enrich_businesses4sale(limit: Optional[int] = None) -> None:
     print(f"📀 SQLite DB path: {DB_PATH}")
 
-    repo = SQLiteRepository(DB_PATH)
+    repo = SQLiteRepository(Path("db/deals.sqlite"))
     conn = repo.get_conn()
 
     deals = repo.fetch_deals_for_enrichment(

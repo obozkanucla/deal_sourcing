@@ -22,7 +22,7 @@ from src.persistence.repository import SQLiteRepository
 # =========================================================
 # CONFIG (unchanged behavior)
 # =========================================================
-repo = SQLiteRepository()
+repo = SQLiteRepository(Path("db/deals.sqlite"))
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 
 PDF_ROOT = Path("/tmp/do_pdfs")

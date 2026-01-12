@@ -41,7 +41,8 @@ LOST_PHRASES = [
     "business has been sold",
     "opportunity withdrawn",
 ]
-repo = SQLiteRepository()
+repo = SQLiteRepository(Path("db/deals.sqlite"))
+
 
 def is_businessbuyers_lost(html: Optional[str]) -> bool:
     if not html:

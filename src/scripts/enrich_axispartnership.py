@@ -17,7 +17,8 @@ from src.utils.hash_utils import compute_file_hash
 from src.persistence.repository import SQLiteRepository
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/axis_pdfs")
-repo = SQLiteRepository()
+repo = SQLiteRepository(Path("db/deals.sqlite"))
+
 
 # ------------------------------------------------------------------
 # EXTRACTION HELPERS
