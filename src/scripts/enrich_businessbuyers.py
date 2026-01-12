@@ -19,7 +19,7 @@ from src.integrations.google_drive import (
 
 from src.sector_mappings.businessbuyers import map_businessbuyers_sector
 from src.utils.hash_utils import compute_file_hash
-
+from src.persistence.repository import SQLiteRepository
 # -------------------------------------------------
 # CONFIG
 # -------------------------------------------------
@@ -41,6 +41,7 @@ LOST_PHRASES = [
     "business has been sold",
     "opportunity withdrawn",
 ]
+repo = SQLiteRepository()
 
 def is_businessbuyers_lost(html: Optional[str]) -> bool:
     if not html:
@@ -122,20 +123,9 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
-    rows = conn.execute(
-        """
-        SELECT id, source_url, title
-        FROM deals
-        WHERE source = 'BusinessBuyers'
-            AND (
-                needs_detail_refresh = 1
-             OR detail_fetched_at IS NULL
-             OR detail_fetched_at < datetime('now', '-14 days')
-            )
-            AND (status IS NULL OR status != 'Lost')
-        ORDER BY last_seen DESC
-        """
-    ).fetchall()
+    rows = repo.fetch_deals_for_enrichment(
+        source="BusinessBuyers",
+    )
 
     if limit:
         rows = rows[:limit]

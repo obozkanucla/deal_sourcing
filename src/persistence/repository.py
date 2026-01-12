@@ -380,6 +380,7 @@ class SQLiteRepository:
                     f"update_sector_inference affected {cur.rowcount} rows "
                     f"(expected 1, id={deal_id})"
                 )
+
     def fetch_by_deal_id(self, deal_id: str):
         with self.get_conn() as conn:
             cur = conn.execute(
@@ -533,6 +534,7 @@ class SQLiteRepository:
                 """,
                 deal,
             )
+
     def upsert_intermediary(self, rec: dict):
         with self.get_conn() as conn:
             conn.execute(
@@ -994,3 +996,40 @@ class SQLiteRepository:
         with self.get_conn() as conn:
             rows = conn.execute("PRAGMA table_info(deals)").fetchall()
         return {r["name"] for r in rows}
+
+    def insert_status_history(self, deal_id, old_status, new_status):
+        with self.get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO deal_status_history
+                    (deal_id, old_status, new_status, changed_at)
+                VALUES (?, ?, ?, datetime('now'))
+                """,
+                (deal_id, old_status, new_status)
+            )
+
+    def fetch_deals_for_enrichment(
+            self,
+            source: str,
+            freshness_days: int = 14,
+    ):
+        with self.get_conn() as conn:
+            conn.row_factory = sqlite3.Row
+            return conn.execute(
+                """
+                SELECT id,
+                       source_listing_id,
+                       source_url,
+                       title
+                FROM deals
+                WHERE source = ?
+                  AND (
+                    needs_detail_refresh = 1
+                        OR detail_fetched_at IS NULL
+                        OR detail_fetched_at < datetime('now', ?)
+                    )
+                  AND (status IS NULL OR status NOT IN ('Pass', 'Lost'))
+                ORDER BY source_listing_id;
+                """,
+                (source, f"-{freshness_days} days"),
+            ).fetchall()

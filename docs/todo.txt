@@ -1,3 +1,12 @@
+12/01/2026
+CREATE TABLE IF NOT EXISTS deal_status_history (
+    deal_id            TEXT NOT NULL,
+    old_status         TEXT,
+    new_status         TEXT,
+    changed_at         TEXT NOT NULL
+);
+
+
 11/01/2026
 UPDATE deals
 SET

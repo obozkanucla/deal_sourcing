@@ -21,10 +21,12 @@ from src.sector_mappings.knightsbridge import KNIGHTSBRIDGE_SECTOR_MAP
 from src.persistence.deal_artifacts import record_deal_artifact
 from src.utils.hash_utils import compute_file_hash
 from src.brokers.knightsbridge_client import KnightsbridgeClient
+from src.persistence.repository import SQLiteRepository
 
 # ---------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------
+repo = SQLiteRepository()
 KNIGHTSBRIDGE_EXTRACTION_VERSION = "v1"
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/knightsbridge_pdfs")
@@ -172,31 +174,9 @@ def enrich_knightsbridge(limit: Optional[int] = None):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
-    rows = conn.execute(
-        """
-        SELECT
-            id,
-            title,
-            sector_raw,
-            industry,
-            sector,
-            sector_inference_confidence,
-            sector_inference_reason,
-            source_listing_id,
-            source_url,
-            description,
-            asking_price_k,
-            pdf_drive_url
-        FROM deals
-        WHERE source = 'Knightsbridge'
-            AND (
-                  needs_detail_refresh = 1
-               OR detail_fetched_at IS NULL
-               OR detail_fetched_at < DATETIME('now', '-14 days')
-            )
-        ORDER BY source_listing_id
-        """
-    ).fetchall()
+    rows = repo.fetch_deals_for_enrichment(
+        source="Knightsbridge",
+    )
 
     if limit:
         rows = rows[:limit]

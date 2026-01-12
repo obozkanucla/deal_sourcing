@@ -27,18 +27,14 @@ INDUSTRY_ORDER = [
 ]
 
 PIPELINE_STATUS_ORDER = [
-    "new",
-    "not_yet_analysed",
-    "initial_contact",
-    "cim",
-    "cim_dd",
-    "1st_meeting_(online)",
-    "1st_meeting_(in_person)",
-    "2nd_meeting_(online)",
-    "2nd_meeting_(in_person)",
-    "loi",
-    "pass",
-    "lost",
+    "Unassessed",
+    "Pass",
+    "Initial Contact",
+    "CIM",
+    "CIM DD",
+    "Meeting",
+    "LOI",
+    "Lost"
 ]
 
 # -------------------------------------------------
@@ -46,33 +42,14 @@ PIPELINE_STATUS_ORDER = [
 # -------------------------------------------------
 
 PIPELINE_STATUS_CANONICAL = {
-    None: "not_yet_analysed",
-
-    "new": "new",
-
-    "initial contact": "initial_contact",
-    "Initial Contact": "initial_contact",
-
-    "cim": "cim",
-    "CIM": "cim",
-
-    "cim dd": "cim_dd",
-    "CIM DD": "cim_dd",
-
-    "1st meeting (online)": "1st_meeting_(online)",
-    "1st meeting (in person)": "1st_meeting_(in_person)",
-
-    "2nd meeting (online)": "2nd_meeting_(online)",
-    "2nd meeting (in person)": "2nd_meeting_(in_person)",
-
-    "loi": "loi",
-    "LOI": "loi",
-
-    "pass": "pass",
-    "Pass": "pass",
-
-    "lost": "lost",
-    "Lost": "lost",
+    "Unassessed":"Unassessed",
+    "Pass":"Pass",
+    "Initial Contact":"Initial Contact",
+    "CIM":"CIM",
+    "CIM DD":"CIM DD",
+    "Meeting":"Meeting",
+    "LOI":"LOI",
+    "Lost":"Lost"
 }
 
 

@@ -13,6 +13,7 @@ DROPDOWNS = {
         "Initial Contact",
         "CIM",
         "CIM DD",
+        "Meeting",
         "LOI",
         "Lost"
     ],
@@ -178,7 +179,7 @@ def ensure_sheet_headers(ws, columns):
 def push_sqlite_to_sheets(repo, ws):
     headers = ws.row_values(1)
     expected = deal_column_names()
-    print(headers, expected)
+    # print(headers, expected)
 
     if headers != expected:
         raise RuntimeError(
@@ -221,6 +222,7 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
     - Numeric fields are coerced to REAL before comparison
     - Empty cells map to NULL only if allow_blank_pull=True
     - Broker / system fields are never touched
+    - Status changes are recorded in deal_status_history
     """
 
     # 🔒 ONLY manual / analyst numeric fields
@@ -281,6 +283,9 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
 
         updates = {}
 
+        # capture old status once (for history)
+        old_status = db_deal.get("status")
+
         for col in pullable_columns:
             idx = col_idx[col.name]
             raw_val = row[idx].strip() if idx < len(row) else ""
@@ -298,7 +303,6 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
                         updates[col.name] = None
                     continue
 
-                # strict numeric comparison
                 if db_val is None or float(sheet_val) != float(db_val):
                     updates[col.name] = sheet_val
 
@@ -316,6 +320,16 @@ def pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS):
 
         if updates:
             updates["last_updated_source"] = "MANUAL"
+
+            # ----------------------------------
+            # STATUS HISTORY (single write point)
+            # ----------------------------------
+            if "status" in updates:
+                repo.insert_status_history(
+                    deal_id=db_deal["id"],  # ✅ PRIMARY KEY
+                    old_status=old_status,
+                    new_status=updates["status"],
+                )
 
             repo.update_deal_fields(
                 source=source,

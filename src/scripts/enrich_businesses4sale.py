@@ -154,23 +154,9 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
     repo = SQLiteRepository(DB_PATH)
     conn = repo.get_conn()
 
-    deals = conn.execute(
-        """
-        SELECT
-            id,
-            source_url,
-            source_listing_id
-        FROM deals
-        WHERE source = 'BusinessesForSale'
-          AND (
-                needs_detail_refresh = 1
-             OR detail_fetched_at IS NULL
-             OR detail_fetched_at < datetime('now', '-14 days')
-              )
-          AND (status IS NULL OR status != 'Lost')
-        ORDER BY last_seen DESC
-        """
-    ).fetchall()
+    deals = repo.fetch_deals_for_enrichment(
+        source="BusinessesForSale",
+    )
 
     if limit:
         deals = deals[:limit]

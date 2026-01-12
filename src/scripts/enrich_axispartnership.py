@@ -14,10 +14,10 @@ from src.integrations.google_drive import (
 from src.sector_mappings.axis import infer_axis_industry_sector
 from src.persistence.deal_artifacts import record_deal_artifact
 from src.utils.hash_utils import compute_file_hash
-
+from src.persistence.repository import SQLiteRepository
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/axis_pdfs")
-
+repo = SQLiteRepository()
 
 # ------------------------------------------------------------------
 # EXTRACTION HELPERS
@@ -108,24 +108,9 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
-    rows = conn.execute(
-        """
-        SELECT
-            id,
-            source_listing_id,
-            source_url,
-            title
-        FROM deals
-        WHERE source = 'AxisPartnership'
-          AND (
-                needs_detail_refresh = 1
-             OR detail_fetched_at IS NULL
-             OR detail_fetched_at < datetime('now', '-14 days')
-              )
-          AND (status IS NULL OR status != 'Lost')
-        ORDER BY source_listing_id;
-        """
-    ).fetchall()
+    rows = repo.fetch_deals_for_enrichment(
+        source="AxisPartnership",
+    )
 
     if limit:
         rows = rows[:limit]

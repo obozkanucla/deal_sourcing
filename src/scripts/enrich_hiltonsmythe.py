@@ -17,10 +17,12 @@ from src.integrations.google_drive import (
 )
 from src.persistence.deal_artifacts import record_deal_artifact
 from src.utils.hash_utils import compute_file_hash
+from src.persistence.repository import SQLiteRepository
 
 # ---------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------
+repo = SQLiteRepository()
 HS_EXTRACTION_VERSION = "v1"
 BROKER = "HiltonSmythe"
 
@@ -118,29 +120,10 @@ def enrich_hiltonsmythe(limit: Optional[int] = None):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
-    rows = conn.execute(
-        """
-        SELECT
-            id,
-            title,
-            industry,
-            sector,
-            sector_inference_confidence,
-            sector_inference_reason,
-            source_listing_id,
-            source_url,
-            description,
-            pdf_drive_url
-        FROM deals
-        WHERE source = 'HiltonSmythe'
-          AND (
-                needs_detail_refresh = 1
-             OR detail_fetched_at IS NULL
-             OR detail_fetched_at < DATETIME('now', '-14 days')
-          )
-        ORDER BY source_listing_id
-        """
-    ).fetchall()
+    rows = repo.fetch_deals_for_enrichment(
+        source="HiltonSmythe",
+        freshness_days=14,
+    )
 
     if limit:
         rows = rows[:limit]
