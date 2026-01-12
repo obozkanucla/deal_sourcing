@@ -197,9 +197,6 @@ class PipelineCharts:
         df["status"] = pd.Categorical(
             df["status"], categories=FUNNEL_ORDER, ordered=True
         )
-        df["status"] = pd.Categorical(
-            df["status"], categories=FUNNEL_ORDER, ordered=True
-        )
         df = df.sort_values("status")
         df = df[df["status"].notna()]
 
