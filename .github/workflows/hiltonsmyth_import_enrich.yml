@@ -135,8 +135,8 @@ jobs:
 #      - name: Enrich BusinessesForSale
 #        run: python -m src.scripts.enrich_businesses4sale
 #
-      - name: Enrich DealOpportunities
-        run: python -m src.scripts.enrich_dealopportunities
+#      - name: Enrich DealOpportunities
+#        run: python -m src.scripts.enrich_dealopportunities
 #
 #      - name: Enrich Knightsbridge
 #        run: python -m src.scripts.enrich_knightsbridge
