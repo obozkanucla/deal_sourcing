@@ -154,6 +154,7 @@ def snapshot_pipeline_run(force_current_week=False):
 
     print("✅ Weekly snapshot written successfully")
 
+    return snapshot_key
 
 # -------------------------------------------------
 # ENTRYPOINT
