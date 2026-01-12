@@ -9,8 +9,78 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""ALTER TABLE deals ADD COLUMN lost_reason TEXT;""")
+    conn.execute("""UPDATE deals
+                    SET
+                        detail_fetch_reason  = NULL,
+                        last_updated         = CURRENT_TIMESTAMP,
+                        last_updated_source  = 'AUTO'
+                    WHERE source = 'Knightsbridge'
+                      AND detail_fetch_reason = 'cannot access local variable ''e'' where it is not associated with a value'
+                      AND industry IS NOT NULL
+                      AND sector IS NOT NULL
+                      AND needs_detail_refresh = 0;
+                 """)
 
+    conn.execute("""UPDATE deals
+                    SET
+                        industry                    = 'Healthcare',
+                        sector                      = 'Medical Devices / Equipment',
+                        sector_source               = 'manual',
+                        sector_inference_confidence = 1.0,
+                        sector_inference_reason     = 'manual_final_resolution',
+                    
+                        detail_fetched_at           = CURRENT_TIMESTAMP,
+                        needs_detail_refresh        = 0,
+                        detail_fetch_reason         = NULL,
+                    
+                        last_updated                = CURRENT_TIMESTAMP,
+                        last_updated_source         = 'AUTO'
+                    WHERE source = 'Knightsbridge'
+                      AND source_listing_id = '165799';
+                 """)
+
+    conn.execute("""UPDATE deals
+                    SET
+                        industry                    = 'Business_Services',
+                        sector                      = 'Facilities Management',
+                        sector_source               = 'manual',
+                        sector_inference_confidence = 1.0,
+                        sector_inference_reason     = 'manual_final_resolution',
+                    
+                        detail_fetched_at           = CURRENT_TIMESTAMP,
+                        needs_detail_refresh        = 0,
+                        detail_fetch_reason         = NULL,
+                    
+                        last_updated                = CURRENT_TIMESTAMP,
+                        last_updated_source         = 'AUTO'
+                    WHERE source = 'Knightsbridge'
+                      AND source_listing_id = '166105';
+                 """)
+
+    conn.execute("""UPDATE deals
+                    SET
+                        detail_fetch_reason = NULL,
+                        last_updated = CURRENT_TIMESTAMP,
+                        last_updated_source = 'AUTO'
+                    WHERE source = 'Knightsbridge'
+                      AND detail_fetch_reason = 'MISSING_SECTOR_CANONICAL'
+                      AND industry IS NOT NULL
+                      AND sector IS NOT NULL;
+                 """)
+
+    conn.execute("""UPDATE deals
+                    SET
+                        detail_fetched_at    = CURRENT_TIMESTAMP,
+                        needs_detail_refresh = 0,
+                        detail_fetch_reason  = 'REQUIRES_MANUAL_SECTOR_ASSIGNMENT',
+                        last_updated         = CURRENT_TIMESTAMP,
+                        last_updated_source  = 'AUTO'
+                    WHERE source = 'Knightsbridge'
+                      AND detail_fetch_reason = 'MISSING_SECTOR_CANONICAL'
+                      AND detail_fetched_at IS NULL;
+                 """)
+
+    # conn.execute("""ALTER TABLE deals ADD COLUMN lost_reason TEXT;""")
     # conn.execute(""" ALTER TABLE deals
     #     ADD COLUMN detail_fetch_reason TEXT;""")
     # conn.execute("""

@@ -56,8 +56,6 @@ SET
 WHERE source = 'Knightsbridge'
   AND source_listing_id = '165799';
 
-
-
 UPDATE deals
 SET
     detail_fetch_reason  = NULL,
