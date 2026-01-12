@@ -253,6 +253,7 @@ class PipelineCharts:
             df["status"], categories=FUNNEL_ORDER, ordered=True
         )
         df = df.sort_values("status")
+        df = df[df["status"].notna()]
 
         df["color"] = df["status"].map(STAGE_COLORS)
 
