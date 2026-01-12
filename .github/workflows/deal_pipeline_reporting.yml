@@ -142,8 +142,8 @@ jobs:
       # --------------------------------------------------
       # Phase 4 — Sync outputs
       # --------------------------------------------------
-      - name: Sync SQLite → Google Sheets
-        run: python -m src.scripts.sync_to_sheets
+#      - name: Sync SQLite → Google Sheets
+#        run: python -m src.scripts.sync_to_sheets
 
       # --------------------------------------------------
       # Phase 4 — Sync outputs
