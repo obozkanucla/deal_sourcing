@@ -27,7 +27,7 @@ jobs:
       # Slack
       # -----------------------------
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+      SLACK_DEFAULT_CHANNEL_ID: ${{ secrets.SLACK_DEFAULT_CHANNEL_ID }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       # -----------------------------
