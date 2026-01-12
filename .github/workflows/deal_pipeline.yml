@@ -1,8 +1,8 @@
 name: Deal Sourcing Pipeline
 
 on:
-  schedule:
-    - cron: "* * * * *"   # daily at 6:00 UTC
+#  schedule:
+#    - cron: "* * * * *"   # daily at 6:00 UTC
   workflow_dispatch:
 
 permissions:

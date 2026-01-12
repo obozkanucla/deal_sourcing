@@ -1,8 +1,8 @@
 name: Deal Pipeline Reporting
 
 on:
-  schedule:
-    - cron: "0 8 * * 5"   # Friday 08:00 UTC
+#  schedule:
+#    - cron: "0 8 * * 5"   # Friday 08:00 UTC
   workflow_dispatch:      # allow manual runs
 
 permissions:
