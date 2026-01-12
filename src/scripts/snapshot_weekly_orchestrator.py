@@ -1,6 +1,6 @@
-from src.scripts.snapshot_weekly_pipeline import snapshot_pipeline_run
-from src.scripts.snapshot_weekly_chart import plot_latest_pipeline_snapshot
-from src.scripts.snapshot_weekly_slack import post_snapshot_to_slack
+from src.reporting.snapshot_builder import snapshot_pipeline_run
+from src.reporting.snapshot_weekly_chart import plot_latest_pipeline_snapshot
+from src.reporting.slack_reporter import post_snapshot_to_slack
 import os
 
 FORCE_CURRENT_WEEK = os.getenv("FORCE_CURRENT_WEEK", "0") == "1"
