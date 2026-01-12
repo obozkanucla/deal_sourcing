@@ -132,6 +132,7 @@ class PipelineCharts:
             values="deals",
             aggfunc="sum",
             fill_value=0,
+            observed=False,
         )
 
         fig, ax = plt.subplots(figsize=(18, 8))
@@ -196,7 +197,11 @@ class PipelineCharts:
         df["status"] = pd.Categorical(
             df["status"], categories=FUNNEL_ORDER, ordered=True
         )
+        df["status"] = pd.Categorical(
+            df["status"], categories=FUNNEL_ORDER, ordered=True
+        )
         df = df.sort_values("status")
+        df = df[df["status"].notna()]
 
         colors = df["delta"].apply(
             lambda x: "#2ca02c" if x > 0 else "#d62728"
