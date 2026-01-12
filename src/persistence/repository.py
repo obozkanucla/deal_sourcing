@@ -1020,7 +1020,8 @@ class SQLiteRepository:
                 SELECT id,
                        source_listing_id,
                        source_url,
-                       title
+                       title,
+                       sector_raw
                 FROM deals
                 WHERE source = ?
                   AND (
