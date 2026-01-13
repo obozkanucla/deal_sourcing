@@ -112,26 +112,9 @@ def enrich_dealopportunities():
     #     source="DealOpportunities",
     # )
 
-    rows = conn.execute(
-        """
-            SELECT
-                id,
-                source_listing_id,
-                source_url,
-                title,
-                sector_raw
-            FROM deals
-            WHERE source = 'DealOpportunities'
-              AND (
-                    industry IS NULL
-                 OR industry = 'Other'
-                 OR title IS NULL
-                 OR description IS NULL
-                 OR location_raw IS NULL
-              )
-            ORDER BY last_seen DESC
-        """
-    ).fetchall()
+    rows = repo.fetch_deals_for_enrichment(
+        source="DealOpportunities"
+    )
 
     if not rows:
         print("✅ Nothing to enrich")
@@ -225,23 +208,25 @@ def enrich_dealopportunities():
             if not DRY_RUN:
                 conn.execute(
                     """
-                    UPDATE deals
-                    SET
-                        title = ?,
-                        description = ?,
-                        location_raw = ?,
-                        location = COALESCE(location, ?),
-                        industry = ?,
-                        sector = ?,
-                        content_hash = ?,
-                        drive_folder_id = ?,
-                        drive_folder_url = ?,
-                        pdf_drive_url = ?,
-                        pdf_generated_at = CURRENT_TIMESTAMP,
-                        detail_fetched_at = CURRENT_TIMESTAMP,
-                        last_updated = CURRENT_TIMESTAMP,
-                        last_updated_source = 'AUTO'
-                    WHERE id = ?
+                        UPDATE deals
+                        SET
+                            title = ?,
+                            description = ?,
+                            location_raw = ?,
+                            location = COALESCE(location, ?),
+                            industry = ?,
+                            sector = ?,
+                            content_hash = ?,
+                            drive_folder_id = ?,
+                            drive_folder_url = ?,
+                            pdf_drive_url = ?,
+                            pdf_generated_at = CURRENT_TIMESTAMP,
+                            detail_fetched_at = CURRENT_TIMESTAMP,
+                            needs_detail_refresh = 0,
+                            detail_fetch_reason = NULL,
+                            last_updated = CURRENT_TIMESTAMP,
+                            last_updated_source = 'AUTO'
+                        WHERE id = ?
                     """,
                     (
                         title,
