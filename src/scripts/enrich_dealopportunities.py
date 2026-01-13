@@ -113,7 +113,7 @@ def enrich_dealopportunities():
     # )
 
     rows = repo.fetch_deals_for_enrichment(
-        source="DealOpportunities"
+        source="DealOpportunities", freshness_days=14
     )
 
     if not rows:
