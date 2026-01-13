@@ -9,9 +9,16 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""UPDATE deals
-                    SET first_seen = '2026-01-12 09:00:00'
-                    WHERE source = 'HiltonSmythe';""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS deal_status_history (
+                        deal_id            TEXT NOT NULL,
+                        old_status         TEXT,
+                        new_status         TEXT,
+                        changed_at         TEXT NOT NULL
+                    );
+            """)
+    # conn.execute("""UPDATE deals
+    #                 SET first_seen = '2026-01-12 09:00:00'
+    #                 WHERE source = 'HiltonSmythe';""")
     # conn.execute("""UPDATE deals
     #                 SET
     #                     detail_fetch_reason  = NULL,
