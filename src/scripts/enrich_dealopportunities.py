@@ -108,30 +108,30 @@ def enrich_dealopportunities():
     conn.row_factory = sqlite3.Row
 
     # 🔧 ONE-TIME REPAIR: ALL DO DEALS
-    rows = repo.fetch_deals_for_enrichment(
-        source="DealOpportunities",
-    )
+    # rows = repo.fetch_deals_for_enrichment(
+    #     source="DealOpportunities",
+    # )
 
-    # rows = conn.execute(
-    #     """
-    #         SELECT
-    #             id,
-    #             source_listing_id,
-    #             source_url,
-    #             title,
-    #             sector_raw
-    #         FROM deals
-    #         WHERE source = 'DealOpportunities'
-    #           AND (
-    #                 industry IS NULL
-    #              OR industry = 'Other'
-    #              OR title IS NULL
-    #              OR description IS NULL
-    #              OR location_raw IS NULL
-    #           )
-    #         ORDER BY last_seen DESC
-    #     """
-    # ).fetchall()
+    rows = conn.execute(
+        """
+            SELECT
+                id,
+                source_listing_id,
+                source_url,
+                title,
+                sector_raw
+            FROM deals
+            WHERE source = 'DealOpportunities'
+              AND (
+                    industry IS NULL
+                 OR industry = 'Other'
+                 OR title IS NULL
+                 OR description IS NULL
+                 OR location_raw IS NULL
+              )
+            ORDER BY last_seen DESC
+        """
+    ).fetchall()
 
     if not rows:
         print("✅ Nothing to enrich")
