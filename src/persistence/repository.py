@@ -156,6 +156,7 @@ class SQLiteRepository:
             source: str,
             source_listing_id: str,
             source_url: str | None = None,
+            title: str | None = None,
             sector_raw: str | None = None,
             location_raw: str | None = None,
             turnover_range_raw: str | None = None,
@@ -227,15 +228,47 @@ class SQLiteRepository:
                         source_url,
                     ),
                 )
-
             else:
-                # keep existing ON CONFLICT logic for other brokers
                 conn.execute(
                     """
-                    INSERT INTO deals (...)
-                    VALUES (...) ON CONFLICT(source, source_listing_id) DO
-                    UPDATE...
-                    """
+                    INSERT INTO deals (source,
+                                       source_listing_id,
+                                       source_url,
+                                       title,
+                                       sector_raw,
+                                       location_raw,
+                                       turnover_range_raw,
+                                       first_seen,
+                                       last_seen,
+                                       last_updated,
+                                       last_updated_source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(source, source_listing_id)
+                    DO
+                    UPDATE SET
+                        title = excluded.title,
+                        source_url = excluded.source_url,
+                        sector_raw = COALESCE (excluded.sector_raw, deals.sector_raw),
+                        location_raw = COALESCE (excluded.location_raw, deals.location_raw),
+                        turnover_range_raw = COALESCE (excluded.turnover_range_raw, deals.turnover_range_raw),
+                        last_seen = excluded.last_seen,
+                        last_updated = excluded.last_updated,
+                        last_updated_source= excluded.last_updated_source
+                    """,
+                    (
+                        source,
+                        source_listing_id,
+                        source_url,
+                        title,
+                        sector_raw,
+                        location_raw,
+                        turnover_range_raw,
+                        first_seen,
+                        last_seen,
+                        last_updated or now,
+                        last_updated_source or "AUTO",
+
+                    ),
+
                 )
 
     def get_pending_index_records(self, source: str):
@@ -838,15 +871,12 @@ class SQLiteRepository:
             deal_id: int,
             updates: dict,
     ):
-        safe_updates = {
-            k: v for k, v in updates.items()
-            if k in self.DEALS_DB_COLUMNS
-        }
+        safe_updates = {k: v for k, v in updates.items() if k in self.DEALS_DB_COLUMNS}
         if not safe_updates:
             return
 
         cols = ", ".join(f"{k} = ?" for k in safe_updates)
-        values = list(safe_updates.values())
+        values = list(safe_updates.values()) + [deal_id]
 
         sql = f"""
             UPDATE deals
@@ -857,7 +887,7 @@ class SQLiteRepository:
         """
 
         with self.get_conn() as conn:
-            conn.execute(sql, values + [deal_id])
+            conn.execute(sql, values)
             conn.commit()
 
     def upsert_deal_v2(self, deal: dict):
