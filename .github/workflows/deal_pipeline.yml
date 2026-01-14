@@ -108,6 +108,12 @@ jobs:
       - name: Import Knightsbridge
         run: python -m src.scripts.import_knightsbridge
 
+      - name: Import Hilton Smythe
+        run: python -m src.scripts.import_hiltonsmythe
+
+      - name: Import TransWorld
+        run: python -m src.scripts.import_transworld
+
       # --------------------------------------------------
       # Phase 2 — Enrichment
       # --------------------------------------------------
@@ -125,6 +131,12 @@ jobs:
 
       - name: Enrich Knightsbridge
         run: python -m src.scripts.enrich_knightsbridge
+
+      - name: Enrich Hilton Smythe
+        run: python -m src.scripts.enrich_hiltonsmythe
+
+      - name: Enrich TransWorld
+        run: python -m src.scripts.enrich_transworld
 
       # --------------------------------------------------
       # Phase 3 — Intelligence
