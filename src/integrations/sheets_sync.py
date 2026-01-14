@@ -5,11 +5,7 @@ from gspread.utils import rowcol_to_a1
 import string
 import random
 from gspread.exceptions import APIError
-from src.domain.deal_states import (
-    ACTIVE_STAGES,
-    SPECIAL_STAGES,
-    TERMINAL_STAGES, STATUS_ORDER,
-)
+from src.domain.deal_states import STATUS_ORDER
 
 SHEET_COLUMNS = [c.name for c in DEAL_COLUMNS]
 DROPDOWNS = {
