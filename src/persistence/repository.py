@@ -1047,23 +1047,22 @@ class SQLiteRepository:
             conn.row_factory = sqlite3.Row
             return conn.execute(
                 """
-                SELECT id,
-                       source_listing_id,
-                       source_url,
-                       title,
-                       sector_raw
-                FROM deals
-                WHERE source = ?
-                  AND (status IS NULL OR status NOT IN ('Pass', 'Lost'))
-                  AND (
-                        title IS NULL
-                     OR description IS NULL
-                     OR industry IS NULL
-                     OR drive_folder_id IS NULL
-                     OR pdf_drive_url IS NULL
-                     OR needs_detail_refresh = 1
-                  )
-                ORDER BY source_listing_id;
+                    SELECT id,
+                           source_listing_id,
+                           source_url,
+                           title,
+                           sector_raw
+                    FROM deals
+                    WHERE source = ?
+                      AND (status IS NULL OR status NOT IN ('Pass', 'Lost'))
+                      AND (
+                            needs_detail_refresh = 1
+                         OR detail_fetched_at IS NULL
+                         OR (
+                              detail_fetched_at < datetime('now', ?)
+                            )
+                      )
+                    ORDER BY source_listing_id;
                 """,
                 (source, f"-{freshness_days} days"),
             ).fetchall()
