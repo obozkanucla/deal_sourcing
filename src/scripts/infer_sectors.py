@@ -152,13 +152,11 @@ def main():
     deals = repo.fetch_all("""
             SELECT
                 id,
-                deal_id,
                 source,
                 industry,
                 sector,
                 sector_source,
                 sector_raw,
-                industry_raw,
                 description,
                 drive_folder_id
             FROM deals
@@ -190,7 +188,7 @@ def main():
             continue
 
         print(
-            f"\n➡️ {d['source']}:{d['deal_id']} | "
+            f"\n➡️ {d['source']}:{d['id']} | "
             f"{old_industry} → {inference['industry']}"
         )
 

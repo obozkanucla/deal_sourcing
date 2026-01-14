@@ -179,7 +179,7 @@ class DealOpportunitiesClient:
         return html
 
     def fetch_listing_detail_and_pdf(self, url: str, pdf_path: Path, retries=2) -> str:
-        print("➡️ Fetching detail page:")
+        print("➡️ Fetching detail page and generating pdf:")
         print(f"   {url}")
         page = self.browser.new_page()
         for attempt in range(retries + 1):
@@ -190,7 +190,6 @@ class DealOpportunitiesClient:
                 if attempt == retries:
                     raise
                 time.sleep(3)
-        page.goto(url, timeout=60_000)
         # 🔑 MUST come before content extraction or PDF
         self.accept_cookies_if_present(page)
 

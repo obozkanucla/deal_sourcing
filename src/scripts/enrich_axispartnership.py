@@ -154,6 +154,8 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
             kpis        = _extract_kpis(html)
             fetched_at  = datetime.utcnow().isoformat(timespec="seconds")
 
+            is_under_offer = kpis.get("status") == "under_offer"
+
             # ---- Drive resolution ----
             parent_folder_id = get_drive_parent_folder_id(
                 industry=mapping["industry"],
@@ -198,6 +200,11 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
                     description                 = ?,
                     extracted_json              = ?,
 
+                    status = CASE
+                        WHEN status IN ('Lost', 'Pass') THEN status
+                        WHEN ? = 1 THEN 'Under Offer'
+                        ELSE status
+                        END,
                     industry                    = ?,
                     sector                      = ?,
                     sector_source               = 'inferred',
@@ -220,6 +227,8 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
                     title,
                     description,
                     json.dumps(kpis) if kpis else None,
+
+                    is_under_offer,
 
                     mapping["industry"],
                     mapping["sector"],

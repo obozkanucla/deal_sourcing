@@ -36,6 +36,7 @@ HUMAN_SLEEP_JITTER = 4
 
 DRY_RUN = False
 
+REENRICH_ADDED_ONLY = False
 
 # =========================================================
 # HUMAN THROTTLING (layer 3)
@@ -74,6 +75,9 @@ def parse_do_detail(html: str) -> dict:
 
         if "region" in label:
             facts["location"] = value
+
+        elif label == "added":
+            facts["added_at_raw"] = value
 
     return {
         "description": description,
@@ -154,10 +158,13 @@ def enrich_dealopportunities():
 
             # -------- SINGLE FETCH (NO DUPLICATION) --------
             try:
-                html = client.fetch_listing_detail_and_pdf(
-                    url=url,
-                    pdf_path=pdf_path,
-                )
+                if REENRICH_ADDED_ONLY:
+                    html = client.fetch_listing_detail(url=url)
+                else:
+                    html = client.fetch_listing_detail_and_pdf(
+                        url=url,
+                        pdf_path=pdf_path,
+                    )
 
                 if is_do_lost(html):
                     pdf_path.unlink(missing_ok=True)
@@ -196,106 +203,138 @@ def enrich_dealopportunities():
                 continue
 
             parsed = parse_do_detail(html)
-            title = extract_do_title(html) or r["title"]
-            description = parsed["description"]
-            location_raw = parsed["facts"].get("location")
-            if not description and not extract_do_title(html):
-                print("⚠️ Empty detail page — marking Lost")
-                if not DRY_RUN:
+            added_at = None
+            raw_added = parsed["facts"].get("added_at_raw")
+
+            if raw_added:
+                try:
+                    added_at = datetime.strptime(raw_added, "%d %B %Y").date()
+                except ValueError:
+                    print(f"⚠️ Could not parse Added date: {raw_added}")
+            if REENRICH_ADDED_ONLY:
+                if added_at and not DRY_RUN:
                     conn.execute(
                         """
                         UPDATE deals
-                        SET status               = 'Lost',
-                            lost_reason          = 'Empty or invalid detail page',
-                            needs_detail_refresh = 0,
-                            detail_fetched_at    = CURRENT_TIMESTAMP,
-                            last_updated         = CURRENT_TIMESTAMP,
-                            last_updated_source  = 'AUTO'
+                        SET added_at            = ?,
+                            last_seen           = CURRENT_TIMESTAMP,
+                            last_updated        = CURRENT_TIMESTAMP,
+                            last_updated_source = 'AUTO'
                         WHERE id = ?
+                          AND added_at IS NULL;
                         """,
-                        (deal_id,),
+                        (added_at, deal_id),
                     )
                     conn.commit()
 
                 pdf_path.unlink(missing_ok=True)
+                processed += 1
+                human_sleep()
+                print("✅ Reenriched (added_at)")
                 continue
-            content_hash = hashlib.sha256(html.encode()).hexdigest()
+            else:
+                title = extract_do_title(html) or r["title"]
+                description = parsed["description"]
+                location_raw = parsed["facts"].get("location")
+                if not description and not extract_do_title(html):
+                    print("⚠️ Empty detail page — marking Lost")
+                    if not DRY_RUN:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET status               = 'Lost',
+                                lost_reason          = 'Empty or invalid detail page',
+                                needs_detail_refresh = 0,
+                                detail_fetched_at    = CURRENT_TIMESTAMP,
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?
+                            """,
+                            (deal_id,),
+                        )
+                        conn.commit()
 
-            # -------- INDUSTRY / SECTOR (AUTHORITATIVE, RESTORED) --------
-            mapping = map_dealopportunities_sector(
-                raw_sector=r["sector_raw"]
-            )
+                    pdf_path.unlink(missing_ok=True)
+                    continue
+                content_hash = hashlib.sha256(html.encode()).hexdigest()
 
-            industry = mapping["industry"]
-            sector = mapping["sector"]
-
-            # -------- DRIVE (IDEMPOTENT) --------
-            parent_id = get_drive_parent_folder_id(
-                industry=industry,
-                broker="DealOpportunities",
-            )
-
-            deal_folder_id = find_or_create_deal_folder(
-                parent_folder_id=parent_id,
-                deal_id=deal_key,
-                deal_title=title,
-            )
-
-            drive_folder_url = (
-                f"https://drive.google.com/drive/folders/{deal_folder_id}"
-            )
-
-            pdf_drive_url = upload_pdf_to_drive(
-                local_path=pdf_path,
-                filename=f"{deal_key}.pdf",
-                folder_id=deal_folder_id,
-            )
-
-            # -------- DB UPDATE (ATOMIC, FULL REPAIR) --------
-            if not DRY_RUN:
-                conn.execute(
-                    """
-                        UPDATE deals
-                        SET
-                            title = ?,
-                            description = ?,
-                            location_raw = ?,
-                            location = COALESCE(location, ?),
-                            industry = ?,
-                            sector = ?,
-                            content_hash = ?,
-                            drive_folder_id = ?,
-                            drive_folder_url = ?,
-                            pdf_drive_url = ?,
-                            pdf_generated_at = CURRENT_TIMESTAMP,
-                            detail_fetched_at = CURRENT_TIMESTAMP,
-                            needs_detail_refresh = 0,
-                            detail_fetch_reason = NULL,
-                            last_updated = CURRENT_TIMESTAMP,
-                            last_updated_source = 'AUTO'
-                        WHERE id = ?
-                    """,
-                    (
-                        title,
-                        description,
-                        location_raw,
-                        location_raw,
-                        industry,
-                        sector,
-                        content_hash,
-                        deal_folder_id,
-                        drive_folder_url,
-                        pdf_drive_url,
-                        deal_id,
-                    ),
+                # -------- INDUSTRY / SECTOR (AUTHORITATIVE, RESTORED) --------
+                mapping = map_dealopportunities_sector(
+                    raw_sector=r["sector_raw"]
                 )
-                conn.commit()
 
-            pdf_path.unlink(missing_ok=True)
-            processed += 1
-            human_sleep()
+                industry = mapping["industry"]
+                sector = mapping["sector"]
 
-            print("✅ Enriched")
+                # -------- DRIVE (IDEMPOTENT) --------
+                parent_id = get_drive_parent_folder_id(
+                    industry=industry,
+                    broker="DealOpportunities",
+                )
+
+                deal_folder_id = find_or_create_deal_folder(
+                    parent_folder_id=parent_id,
+                    deal_id=deal_key,
+                    deal_title=title,
+                )
+
+                drive_folder_url = (
+                    f"https://drive.google.com/drive/folders/{deal_folder_id}"
+                )
+
+                pdf_drive_url = upload_pdf_to_drive(
+                    local_path=pdf_path,
+                    filename=f"{deal_key}.pdf",
+                    folder_id=deal_folder_id,
+                )
+
+                # -------- DB UPDATE (ATOMIC, FULL REPAIR) --------
+                if not DRY_RUN:
+                    conn.execute(
+                        """
+                            UPDATE deals
+                            SET
+                                title = ?,
+                                description = ?,
+                                location_raw = ?,
+                                location = COALESCE(location, ?),
+                                industry = ?,
+                                sector = ?,
+                                content_hash = ?,
+                                drive_folder_id = ?,
+                                drive_folder_url = ?,
+                                pdf_drive_url = ?,
+                                pdf_generated_at = CURRENT_TIMESTAMP,
+                                detail_fetched_at = CURRENT_TIMESTAMP,
+                                added_at = ?,
+                                needs_detail_refresh = 0,
+                                detail_fetch_reason = NULL,
+                                last_updated = CURRENT_TIMESTAMP,
+                                last_updated_source = 'AUTO'
+                            WHERE id = ?
+                        """,
+                        (
+                            title,
+                            description,
+                            location_raw,
+                            location_raw,
+                            industry,
+                            sector,
+                            content_hash,
+                            deal_folder_id,
+                            drive_folder_url,
+                            pdf_drive_url,
+                            added_at,
+                            deal_id,
+                        ),
+                    )
+                    conn.commit()
+
+                pdf_path.unlink(missing_ok=True)
+                processed += 1
+                human_sleep()
+
+                print("✅ Enriched")
 
     finally:
         client.stop()

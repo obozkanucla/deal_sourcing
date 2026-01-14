@@ -52,7 +52,9 @@ DEAL_COLUMNS = [
     ColumnSpec("leverage_pct", push=True, pull=False),
 
     ColumnSpec("last_updated_source", push=True, pull=False),
+
     # --- Dates (system) ---
+    ColumnSpec("added_at", push=True, pull=False, system=True),
     ColumnSpec("first_seen", push=True, pull=False, system=True),
     ColumnSpec("last_seen", push=True, pull=False, system=True),
     ColumnSpec("last_updated", push=True, pull=False, system=True),
@@ -78,5 +80,17 @@ def deal_column_names():
 VIRTUAL_COLUMNS = {"deal_uid"}
 
 
-def sqlite_select_columns():
-    return [c for c in deal_column_names() if c not in VIRTUAL_COLUMNS]
+def sqlite_select_columns() -> list[str]:
+    """
+    Columns that physically exist in SQLite and are safe to SELECT
+    for enrichment. Virtual columns are excluded.
+    Always includes the primary key `id`.
+    """
+    cols = ["id"]  # primary key is required by all enrichers
+
+    for c in DEAL_COLUMNS:
+        if c.virtual:
+            continue
+        cols.append(c.name)
+
+    return cols

@@ -3,10 +3,21 @@ from pathlib import Path
 from datetime import date
 
 from src.brokers.knightsbridge_client import KnightsbridgeClient
-
+from src.sector_mappings.knightsbridge import KNIGHTSBRIDGE_SECTOR_MAP
 
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 
+def map_knightsbridge_sector(sector_raw: str):
+    mapping = KNIGHTSBRIDGE_SECTOR_MAP.get(sector_raw)
+    if not mapping:
+        raise RuntimeError(f"UNMAPPED_KNIGHTSBRIDGE_SECTOR: {sector_raw}")
+
+    return (
+        mapping["industry"],
+        mapping["sector"],
+        mapping["confidence"],
+        mapping["reason"],
+    )
 
 def import_knightsbridge():
     print(f"📀 SQLite DB path: {DB_PATH}")
@@ -54,6 +65,9 @@ def import_knightsbridge():
                 )
                 refreshed += 1
             else:
+                industry, sector, confidence, reason = map_knightsbridge_sector(
+                    row["sector_raw"]
+                )
                 conn.execute(
                     """
                     INSERT INTO deals (
@@ -62,10 +76,15 @@ def import_knightsbridge():
                         source_url,
                         title,
                         sector_raw,
+                        industry,
+                        sector,
+                        sector_source,
+                        sector_inference_confidence,
+                        sector_inference_reason,
                         first_seen,
                         last_seen,
                         needs_detail_refresh
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'broker', ?, ?, ?, ?, 1)
                     """,
                     (
                         row["source"],
@@ -73,6 +92,10 @@ def import_knightsbridge():
                         row["source_url"],
                         row["title"],
                         row["sector_raw"],
+                        industry,
+                        sector,
+                        confidence,
+                        reason,
                         today,
                         today,
                     ),

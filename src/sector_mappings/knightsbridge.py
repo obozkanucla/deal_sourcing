@@ -1,83 +1,83 @@
-"""
-Knightsbridge → Canonical Industry / Sector Mapping
-
-Rules:
-- This file is the ONLY place Knightsbridge semantics live
-- No inference, no scraping logic, no keyword guessing
-- Confidence is intentionally high (broker-declared)
-- Used during enrich + BAU backfill
-"""
-
-BROKER_NAME = "Knightsbridge"
-
-# -------------------------------------------------------------------
-# RAW KNIGHTSBRIDGE SECTOR → CANONICAL MAPPING
-# -------------------------------------------------------------------
-# Format:
-#   raw_label: {
-#       "industry": <canonical industry>,
-#       "sector": <canonical sector>,
-#       "confidence": float,
-#       "reason": str
-#   }
-# -------------------------------------------------------------------
-
 KNIGHTSBRIDGE_SECTOR_MAP = {
 
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     # BUSINESS SERVICES
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     "Advertising & Media": {
         "industry": "Business_Services",
         "sector": "Marketing / Advertising",
         "confidence": 0.95,
-        "reason": "Knightsbridge sector explicitly advertising/media services",
+        "reason": "Advertising and media services explicitly broker-declared",
+    },
+    "Business Services": {
+        "industry": "Business_Services",
+        "sector": "Outsourced Business Services",
+        "confidence": 0.9,
+        "reason": "Generic business services classification",
+    },
+    "Print, Publishing, Media & Marketing": {
+        "industry": "Business_Services",
+        "sector": "Marketing / Advertising",
+        "confidence": 0.95,
+        "reason": "Knightsbridge combined print, publishing, media and marketing services",
     },
     "Consultancy": {
         "industry": "Business_Services",
         "sector": "Consulting / Professional Services",
         "confidence": 0.95,
-        "reason": "Direct match to consulting services",
+        "reason": "Direct consulting services",
+    },
+    "Corporate": {
+        "industry": "Business_Services",
+        "sector": "Consulting / Professional Services",
+        "confidence": 0.7,
+        "reason": "Generic corporate services bucket used by broker",
     },
     "Recruitment": {
         "industry": "Business_Services",
         "sector": "Recruitment / HR Services",
         "confidence": 0.95,
-        "reason": "Direct recruitment services classification",
+        "reason": "Staffing and recruitment services",
     },
     "Facilities Management": {
         "industry": "Business_Services",
         "sector": "Facilities Management",
-        "confidence": 0.9,
+        "confidence": 0.95,
         "reason": "Facilities and outsourced services",
     },
     "Health & Safety": {
         "industry": "Business_Services",
-        "sector": "Consulting / Professional Services",
-        "confidence": 0.85,
-        "reason": "Health & safety compliance and advisory services",
+        "sector": "Compliance / Advisory Services",
+        "confidence": 0.9,
+        "reason": "Health & safety advisory and compliance services",
     },
     "Events": {
         "industry": "Business_Services",
-        "sector": "Marketing / Advertising",
-        "confidence": 0.8,
-        "reason": "Events, experiential and promotional services",
+        "sector": "Marketing / Events",
+        "confidence": 0.85,
+        "reason": "Events and experiential services",
+    },
+    "Service": {
+        "industry": "Other",
+        "sector": "General Services",
+        "confidence": 0.6,
+        "reason": "Non-specific broker service category",
+    },
+    "Service (Other)": {
+        "industry": "Other",
+        "sector": "Other Services",
+        "confidence": 0.6,
+        "reason": "Explicit broker catch-all",
     },
 
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     # CONSTRUCTION & BUILT ENVIRONMENT
-    # ---------------------------------------------------------------
-    "Commercial": {
-        "industry": "Business_Services",
-        "sector": "Facilities Management",
-        "confidence": 0.75,
-        "reason": "Knightsbridge 'Commercial' heavily skewed to cleaning/FM",
-    },
+    # ------------------------------------------------------------------
     "Construction & Building": {
         "industry": "Construction_Built_Environment",
         "sector": "Construction Contractors",
         "confidence": 0.95,
-        "reason": "Direct construction and building services",
+        "reason": "Construction and building services",
     },
     "Architecture": {
         "industry": "Construction_Built_Environment",
@@ -97,136 +97,144 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "confidence": 0.9,
         "reason": "Electrical installation and contracting",
     },
-    "Refrigeration & Air Conditioning": {
+    "Plumbing & Heating": {
         "industry": "Construction_Built_Environment",
         "sector": "Construction Contractors",
         "confidence": 0.9,
-        "reason": "Mechanical and HVAC contracting services",
+        "reason": "Plumbing and heating contractors",
     },
     "Fire & Security": {
         "industry": "Construction_Built_Environment",
         "sector": "Construction Contractors",
         "confidence": 0.9,
-        "reason": "Fire alarms, security systems, and building safety installation",
+        "reason": "Fire, security and building systems",
     },
     "Flooring Services": {
         "industry": "Construction_Built_Environment",
         "sector": "Construction Contractors",
         "confidence": 0.9,
-        "reason": "Specialist flooring installation and refurbishment",
-    },
-    "Glass Related": {
-        "industry": "Construction_Built_Environment",
-        "sector": "Building Materials",
-        "confidence": 0.85,
-        "reason": "Glazing, glass fabrication and installation services",
+        "reason": "Specialist flooring installation",
     },
     "Gardening & Landscaping": {
         "industry": "Construction_Built_Environment",
         "sector": "Facilities Management",
         "confidence": 0.85,
-        "reason": "Grounds maintenance and landscaping services",
+        "reason": "Grounds maintenance and landscaping",
+    },
+    "Glass Related": {
+        "industry": "Construction_Built_Environment",
+        "sector": "Building Materials",
+        "confidence": 0.85,
+        "reason": "Glazing and glass services",
+    },
+    "Refrigeration & Air Conditioning": {
+        "industry": "Construction_Built_Environment",
+        "sector": "Construction Contractors",
+        "confidence": 0.9,
+        "reason": "HVAC installation and servicing",
+    },
+    "Windows & Doors": {
+        "industry": "Construction_Built_Environment",
+        "sector": "Building Materials",
+        "confidence": 0.9,
+        "reason": "Window and door manufacturing/installation",
+    },
+    "Cleaning Company": {
+        "industry": "Business_Services",
+        "sector": "Facilities Management",
+        "confidence": 0.95,
+        "reason": "Commercial cleaning services",
     },
 
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     # INDUSTRIALS
-    # ---------------------------------------------------------------
-    "Fabrications": {
-        "industry": "Industrials",
-        "sector": "Engineering",
-        "confidence": 0.95,
-        "reason": "Fabrication, machining and engineering workshops",
-    },
+    # ------------------------------------------------------------------
     "Manufacturing": {
         "industry": "Industrials",
         "sector": "Manufacturing",
         "confidence": 0.95,
         "reason": "Explicit manufacturing classification",
     },
+    "Engineering": {
+        "industry": "Industrials",
+        "sector": "Engineering",
+        "confidence": 0.9,
+        "reason": "General engineering businesses",
+    },
+    "Fabrications": {
+        "industry": "Industrials",
+        "sector": "Engineering",
+        "confidence": 0.95,
+        "reason": "Fabrication and machining workshops",
+    },
     "Machinery": {
         "industry": "Industrials",
-        "sector": "Equipment Rental / Leasing",
+        "sector": "Equipment Sales / Hire",
         "confidence": 0.85,
-        "reason": "Machinery sales, hire, and servicing",
+        "reason": "Machinery sales, hire and servicing",
     },
     "Environmental/Energy": {
         "industry": "Industrials",
         "sector": "Energy / Utilities",
         "confidence": 0.9,
-        "reason": "Environmental services and energy-related operations",
+        "reason": "Environmental and energy services",
     },
-    "Waste Management & Recycling": {
+    "Waste management & Recycling": {
         "industry": "Industrials",
         "sector": "Energy / Utilities",
         "confidence": 0.9,
-        "reason": "Waste handling, recycling and environmental services",
+        "reason": "Waste management and recycling services",
     },
 
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     # TECHNOLOGY
-    # ---------------------------------------------------------------
-    "IT Services & Support": {
+    # ------------------------------------------------------------------
+    "IT Technology & Web": {
         "industry": "Technology",
-        "sector": "IT Services / Support",
-        "confidence": 0.95,
-        "reason": "Managed IT and technical support services",
+        "sector": "IT Services / Software",
+        "confidence": 0.9,
+        "reason": "IT, web and digital technology businesses",
     },
     "IT Consultancy": {
         "industry": "Technology",
         "sector": "IT Consulting",
         "confidence": 0.95,
-        "reason": "IT advisory and systems consulting",
+        "reason": "IT advisory and consultancy",
+    },
+    "IT Services & Support": {
+        "industry": "Technology",
+        "sector": "IT Services / Support",
+        "confidence": 0.95,
+        "reason": "Managed IT services and support",
     },
     "Software": {
         "industry": "Technology",
         "sector": "Software / SaaS",
         "confidence": 0.95,
-        "reason": "Software-led and SaaS businesses",
+        "reason": "Software-led businesses",
+    },
+    "Web Design & Development": {
+        "industry": "Technology",
+        "sector": "Software / Digital Services",
+        "confidence": 0.9,
+        "reason": "Web and digital development services",
     },
     "Telecommunications": {
         "industry": "Technology",
         "sector": "Telecommunications",
         "confidence": 0.95,
-        "reason": "Telecom operators and connectivity services",
+        "reason": "Telecoms and connectivity services",
     },
     "Audio & Visual": {
         "industry": "Technology",
-        "sector": "Hardware",
+        "sector": "Hardware / Systems",
         "confidence": 0.85,
-        "reason": "AV systems, installation, and technology services",
+        "reason": "AV systems and technology services",
     },
 
-    # ---------------------------------------------------------------
-    # HEALTHCARE
-    # ---------------------------------------------------------------
-    "Medical & Education": {
-        "industry": "Healthcare",
-        "sector": "Medical Devices / Equipment",
-        "confidence": 0.75,
-        "reason": "Mixed category with healthcare equipment bias",
-    },
-    "Medical Service": {
-        "industry": "Healthcare",
-        "sector": "Hospitals / Clinics",
-        "confidence": 0.9,
-        "reason": "Direct healthcare service providers",
-    },
-    "Funeral Services": {
-        "industry": "Healthcare",
-        "sector": "Social Care",
-        "confidence": 0.85,
-        "reason": "End-of-life and funeral care services",
-    },
-    "Mobility Equipment": {
-        "industry": "Healthcare",
-        "sector": "Medical Devices / Equipment",
-        "confidence": 0.9,
-        "reason": "Mobility aids and healthcare equipment supply",
-    },
-
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     # LOGISTICS & DISTRIBUTION
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     "Transport, Haulage & Logistics": {
         "industry": "Logistics_Distribution",
         "sector": "Freight / Shipping",
@@ -237,23 +245,23 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "industry": "Logistics_Distribution",
         "sector": "Warehousing",
         "confidence": 0.9,
-        "reason": "Storage and removals businesses",
+        "reason": "Removals and storage businesses",
     },
     "Import & Distribution": {
         "industry": "Logistics_Distribution",
-        "sector": "Supply Chain Management",
+        "sector": "Wholesale / Distribution",
         "confidence": 0.9,
-        "reason": "Importers, wholesalers, and distributors",
+        "reason": "Importers and distributors",
     },
 
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     # CONSUMER / RETAIL
-    # ---------------------------------------------------------------
-    "Food Related": {
-        "industry": "Food_Beverage",
-        "sector": "Food Production / Processing",
-        "confidence": 0.85,
-        "reason": "Food-related commercial operations",
+    # ------------------------------------------------------------------
+    "E-commerce": {
+        "industry": "Consumer_Retail",
+        "sector": "E-commerce",
+        "confidence": 0.95,
+        "reason": "Online retail and e-commerce businesses",
     },
     "Wholesale & Retail": {
         "industry": "Consumer_Retail",
@@ -261,65 +269,120 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "confidence": 0.95,
         "reason": "Wholesale and retail operations",
     },
-    "Breweries & Distilleries": {
-        "industry": "Food_Beverage",
-        "sector": "Beverage Production (including Beer Distribution)",
-        "confidence": 0.95,
-        "reason": "Alcohol production and distillation businesses",
-    },
     "Leisure & Lifestyle": {
         "industry": "Consumer_Retail",
         "sector": "Leisure / Hospitality",
         "confidence": 0.9,
         "reason": "Consumer-facing leisure businesses",
     },
+    "Vending Rounds": {
+        "industry": "Consumer_Retail",
+        "sector": "Retail Distribution",
+        "confidence": 0.85,
+        "reason": "Vending and route-based retail",
+    },
 
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # FOOD & BEVERAGE
+    # ------------------------------------------------------------------
+    "Food & Drink": {
+        "industry": "Food_Beverage",
+        "sector": "Food & Beverage",
+        "confidence": 0.9,
+        "reason": "Food and beverage businesses",
+    },
+    "Food Related": {
+        "industry": "Food_Beverage",
+        "sector": "Food Production / Services",
+        "confidence": 0.85,
+        "reason": "Food-related commercial activities",
+    },
+    "Breweries & Distilleries": {
+        "industry": "Food_Beverage",
+        "sector": "Beverage Production",
+        "confidence": 0.95,
+        "reason": "Alcohol production businesses",
+    },
+
+    # ------------------------------------------------------------------
+    # HEALTHCARE
+    # ------------------------------------------------------------------
+    "Medical & Education": {
+        "industry": "Healthcare",
+        "sector": "Medical Devices / Services",
+        "confidence": 0.75,
+        "reason": "Mixed medical and education classification",
+    },
+    "Medical Service": {
+        "industry": "Healthcare",
+        "sector": "Healthcare Services",
+        "confidence": 0.95,
+        "reason": "Direct healthcare service providers",
+    },
+    "Mobility Equipment": {
+        "industry": "Healthcare",
+        "sector": "Medical Devices",
+        "confidence": 0.9,
+        "reason": "Mobility and healthcare equipment",
+    },
+    "Funeral Services": {
+        "industry": "Healthcare",
+        "sector": "Social Care",
+        "confidence": 0.85,
+        "reason": "Funeral and end-of-life services",
+    },
+
+    # ------------------------------------------------------------------
     # EDUCATION
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     "Education Services": {
         "industry": "Education",
-        "sector": "Schools / Colleges",
-        "confidence": 0.85,
-        "reason": "Education and learning service providers",
+        "sector": "Education Services",
+        "confidence": 0.9,
+        "reason": "Education service providers",
     },
     "School/Training Centre": {
         "industry": "Education",
-        "sector": "Schools / Colleges",
+        "sector": "Schools / Training",
         "confidence": 0.9,
-        "reason": "Schools, academies, and training centres",
+        "reason": "Schools and training centres",
     },
-
     "Training": {
         "industry": "Education",
         "sector": "Training / E-learning",
         "confidence": 0.9,
-        "reason": "Standalone training providers explicitly classified by Knightsbridge",
+        "reason": "Standalone training providers",
     },
 
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     # FINANCIAL SERVICES
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     "Financial Services": {
         "industry": "Financial_Services",
-        "sector": "Accounting / Auditing",
-        "confidence": 0.85,
-        "reason": "Financial advisory, accounting and related services",
+        "sector": "Financial Advisory / Accounting",
+        "confidence": 0.9,
+        "reason": "Financial services firms",
     },
-    "Corporate": {
+    "Professional & Financial Services": {
         "industry": "Business_Services",
         "sector": "Consulting / Professional Services",
-        "confidence": 0.7,
-        "reason": "Generic corporate services classification",
+        "confidence": 0.85,
+        "reason": "Combined professional and financial services",
+    },
+    "Professional & Legal Services": {
+        "industry": "Business_Services",
+        "sector": "Legal / Professional Services",
+        "confidence": 0.9,
+        "reason": "Legal and professional services firms",
     },
 
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     # OTHER / EDGE
-    # ---------------------------------------------------------------
+    # ------------------------------------------------------------------
     "Miscellaneous": {
         "industry": "Other",
         "sector": "Miscellaneous",
         "confidence": 0.6,
-        "reason": "Knightsbridge catch-all category",
+        "reason": "Explicit broker miscellaneous category",
     },
 }

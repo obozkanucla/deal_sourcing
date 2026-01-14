@@ -1,3 +1,24 @@
+14/01/2026
+CREATE UNIQUE INDEX IF NOT EXISTS
+ux_bb_source_url
+ON deals(source, source_url)
+WHERE source = 'BusinessBuyers';
+
+CREATE UNIQUE INDEX IF NOT EXISTS
+ux_b4s_source_url
+ON deals(source, source_url)
+WHERE source = 'BusinessesForSale';
+
+DELETE FROM deals
+WHERE source = 'BusinessBuyers'
+  AND pdf_drive_url IS NULL
+  AND description IS NULL
+  AND industry IS NULL;
+
+ALTER TABLE deals
+ADD COLUMN added_at DATE;
+
+
 12/01/2026
 CREATE TABLE IF NOT EXISTS deal_status_history (
     deal_id            TEXT NOT NULL,

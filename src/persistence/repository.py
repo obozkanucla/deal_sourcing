@@ -168,8 +168,69 @@ class SQLiteRepository:
         now = datetime.utcnow().isoformat(timespec="seconds")
 
         with self.get_conn() as conn:
-            if source == "BusinessesForSale":
-                # 1️⃣ insert if new (guarded by uniq_b4s_source_url)
+            if source == "BusinessBuyers":
+                # 1️⃣ insert if new (guarded by uniq(source, source_url))
+                conn.execute(
+                    """
+                    INSERT
+                    OR IGNORE INTO deals (
+                        source,
+                        source_listing_id,
+                        source_url,
+                        title,
+                        sector_raw,
+                        location_raw,
+                        turnover_range_raw,
+                        first_seen,
+                        last_seen,
+                        last_updated,
+                        last_updated_source
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        source,
+                        source_listing_id,  # provisional slug
+                        source_url,
+                        title,
+                        sector_raw,
+                        location_raw,
+                        turnover_range_raw,
+                        first_seen,
+                        last_seen,
+                        last_updated or now,
+                        last_updated_source or "AUTO",
+                    ),
+                )
+
+                # 2️⃣ always update the existing row (by URL)
+                conn.execute(
+                    """
+                    UPDATE deals
+                    SET source_listing_id   = COALESCE(?, source_listing_id),
+                        title               = COALESCE(?, title),
+                        sector_raw          = COALESCE(?, sector_raw),
+                        location_raw        = COALESCE(?, location_raw),
+                        turnover_range_raw  = COALESCE(?, turnover_range_raw),
+                        last_seen           = ?,
+                        last_updated        = ?,
+                        last_updated_source = ?
+                    WHERE source = 'BusinessBuyers'
+                      AND source_url = ?
+                    """,
+                    (
+                        source_listing_id,
+                        title,
+                        sector_raw,
+                        location_raw,
+                        turnover_range_raw,
+                        last_seen,
+                        last_updated or now,
+                        last_updated_source or "AUTO",
+                        source_url,
+                    ),
+                )
+            elif source == "BusinessesForSale":
                 conn.execute(
                     """
                     INSERT
@@ -268,7 +329,6 @@ class SQLiteRepository:
                         last_updated_source or "AUTO",
 
                     ),
-
                 )
 
     def get_pending_index_records(self, source: str):
@@ -1042,27 +1102,57 @@ class SQLiteRepository:
             self,
             source: str,
             freshness_days: int = 14,
+            under_offer_days: int = 2,
+            force_refresh: bool = False,
     ):
+        from src.domain.deal_columns import sqlite_select_columns
+
+        columns = sqlite_select_columns()
+        col_sql = ", ".join(columns)
+
         with self.get_conn() as conn:
             conn.row_factory = sqlite3.Row
-            return conn.execute(
-                """
-                    SELECT id,
-                           source_listing_id,
-                           source_url,
-                           title,
-                           sector_raw
+
+            if force_refresh:
+                return conn.execute(
+                    f"""
+                    SELECT {col_sql}
                     FROM deals
                     WHERE source = ?
                       AND (status IS NULL OR status NOT IN ('Pass', 'Lost'))
                       AND (
                             needs_detail_refresh = 1
                          OR detail_fetched_at IS NULL
-                         OR (
-                              detail_fetched_at < datetime('now', ?)
-                            )
                       )
                     ORDER BY source_listing_id;
+                    """,
+                    (source,),
+                ).fetchall()
+
+            # ---------- normal behavior ----------
+            return conn.execute(
+                f"""
+                SELECT {col_sql}
+                FROM deals
+                WHERE source = ?
+                  AND (status IS NULL OR status NOT IN ('Pass', 'Lost'))
+                  AND (
+                        needs_detail_refresh = 1
+                     OR detail_fetched_at IS NULL
+                     OR (
+                            status = 'Under Offer'
+                        AND detail_fetched_at < datetime('now', ?)
+                     )
+                     OR (
+                            (status IS NULL OR status != 'Under Offer')
+                        AND detail_fetched_at < datetime('now', ?)
+                     )
+                  )
+                ORDER BY source_listing_id;
                 """,
-                (source, f"-{freshness_days} days"),
+                (
+                    source,
+                    f"-{under_offer_days} days",
+                    f"-{freshness_days} days",
+                ),
             ).fetchall()

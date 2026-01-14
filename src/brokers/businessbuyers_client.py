@@ -8,7 +8,6 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from src.brokers.base import BrokerClient
 from src.persistence.repository import SQLiteRepository
 
-
 class BusinessBuyersClient(BrokerClient):
     BASE_URL = "https://businessbuyers.co.uk"
     selected_sector = "Healthcare"

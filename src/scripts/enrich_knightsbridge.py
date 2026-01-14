@@ -198,7 +198,6 @@ def enrich_knightsbridge(limit: Optional[int] = None):
             row_id = r["id"]
             listing_id = r["source_listing_id"]
             url        = r["source_url"]
-            sector_raw = r["sector_raw"]
             raw_title = r["title"]
             title = clean_and_shorten_title(raw_title)
 
@@ -235,8 +234,8 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                 client.page.pdf(path=str(pdf_path), format="A4", print_background=True)
                 industry = r["industry"]
                 sector = r["sector"]
-                sector_confidence = r["sector_inference_confidence"] or 1.0
-                sector_reason = r["sector_inference_reason"] or "legacy_broker_mapping"
+                sector_confidence = 1.0
+                sector_reason = "broker"
 
                 if not industry or not sector:
                     raise RuntimeError("MISSING_SECTOR_CANONICAL")

@@ -112,7 +112,9 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                 # -------------------------------
                 # SOLD → LOST
                 # -------------------------------
-                if "sold" in title.lower() or "sold" in slug.lower():
+                current_identifier = deal["source_listing_id"] or ""
+
+                if "sold" in title.lower() or "/sold" in url.lower():
                     print("⚠️ Marked SOLD — setting Lost")
                     if not DRY_RUN:
                         conn.execute(
@@ -124,13 +126,11 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                                 detail_fetched_at = ?,
                                 last_updated = CURRENT_TIMESTAMP,
                                 last_updated_source = 'AUTO'
-                            WHERE source = ?
-                              AND source_listing_id = ?
+                            WHERE id = ?
                             """,
                             (
                                 datetime.utcnow().isoformat(timespec="seconds"),
-                                SOURCE,
-                                slug,
+                                deal["id"],
                             ),
                         )
                         conn.commit()
@@ -173,19 +173,46 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                                     detail_fetched_at = ?,
                                     last_updated = CURRENT_TIMESTAMP,
                                     last_updated_source = 'AUTO'
-                                WHERE source = ?
-                                  AND source_listing_id = ?
+                                WHERE id = ?
                                 """,
                                 (
                                     datetime.utcnow().isoformat(timespec="seconds"),
-                                    SOURCE,
-                                    slug,
+                                    deal["id"]
                                 ),
                             )
                             conn.commit()
                         continue
 
                     listing_number = f"TW-{raw_listing_number}"
+
+                    existing = conn.execute(
+                        """
+                        SELECT id
+                        FROM deals
+                        WHERE source = ?
+                          AND source_listing_id = ?
+                          AND id != ?
+                        """,
+                        (SOURCE, listing_number, deal["id"]),
+                    ).fetchone()
+
+                    if existing:
+                        print("⚠️ Duplicate Transworld listing number — skipping override")
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET
+                                needs_detail_refresh = 0,
+                                detail_fetched_at    = CURRENT_TIMESTAMP,
+                                detail_fetch_reason  = 'canonicalised_elsewhere',
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?;
+                            """,
+                            (deal["id"],),
+                        )
+                        conn.commit()
+                        continue
 
                     facts = extract_listing_details(soup)
                     description = text_or_none(
@@ -283,8 +310,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                             needs_detail_refresh = 0,
                             last_updated = CURRENT_TIMESTAMP,
                             last_updated_source = 'AUTO'
-                        WHERE source = ?
-                          AND source_listing_id = ?
+                        WHERE id = ?
                         """,
                         (
                             listing_number,
@@ -301,8 +327,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                             pdf_drive_url,
                             deal_folder_id,
                             fetched_at,
-                            SOURCE,
-                            slug,
+                            deal["id"]
                         ),
                     )
                     conn.commit()
