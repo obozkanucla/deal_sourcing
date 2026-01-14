@@ -127,8 +127,6 @@ def enrich_dealopportunities():
     client = DealOpportunitiesClient()
     client.start()
 
-    drive_service = get_drive_service()
-
     try:
         for idx, r in enumerate(rows):
             if time.time() - start_time > MAX_RUNTIME:
