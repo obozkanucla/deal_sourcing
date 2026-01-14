@@ -44,6 +44,13 @@ DRY_RUN = False
 def human_sleep():
     time.sleep(HUMAN_SLEEP_BASE + random.random() * HUMAN_SLEEP_JITTER)
 
+def is_do_lost(html: str) -> bool:
+    text = html.lower()
+    return any(p in text for p in [
+        "this opportunity is no longer available",
+        "page not found",
+        "cannot be found",
+    ])
 
 # =========================================================
 # HTML PARSING (RESTORED)
@@ -108,12 +115,8 @@ def enrich_dealopportunities():
     conn.row_factory = sqlite3.Row
 
     # 🔧 ONE-TIME REPAIR: ALL DO DEALS
-    # rows = repo.fetch_deals_for_enrichment(
-    #     source="DealOpportunities",
-    # )
-
     rows = repo.fetch_deals_for_enrichment(
-        source="DealOpportunities", freshness_days=14
+        source="DealOpportunities"
     )
 
     if not rows:
@@ -145,6 +148,10 @@ def enrich_dealopportunities():
             print(f"\n[{processed + 1}] ➜ {deal_key}")
             print(f"➡️ Fetching detail page:\n   {url}")
 
+            if not deal_key:
+                print("⚠️ Missing source_listing_id — skipping")
+                continue
+
             pdf_path = PDF_ROOT / f"{deal_key}.pdf"
 
             # -------- SINGLE FETCH (NO DUPLICATION) --------
@@ -153,6 +160,29 @@ def enrich_dealopportunities():
                     url=url,
                     pdf_path=pdf_path,
                 )
+
+                if is_do_lost(html):
+                    pdf_path.unlink(missing_ok=True)
+                    print("⚠️ Listing marked LOST by broker")
+
+                    if not DRY_RUN:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET status               = 'Lost',
+                                lost_reason          = 'Listing no longer available',
+                                needs_detail_refresh = 0,
+                                detail_fetched_at    = CURRENT_TIMESTAMP,
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?
+                            """,
+                            (deal_id,),
+                        )
+                        conn.commit()
+
+                    pdf_path.unlink(missing_ok=True)
+                    continue
             except PlaywrightError as e:
                 conn.execute(
                     """
@@ -171,7 +201,26 @@ def enrich_dealopportunities():
             title = extract_do_title(html) or r["title"]
             description = parsed["description"]
             location_raw = parsed["facts"].get("location")
+            if not description and not extract_do_title(html):
+                print("⚠️ Empty detail page — marking Lost")
+                if not DRY_RUN:
+                    conn.execute(
+                        """
+                        UPDATE deals
+                        SET status               = 'Lost',
+                            lost_reason          = 'Empty or invalid detail page',
+                            needs_detail_refresh = 0,
+                            detail_fetched_at    = CURRENT_TIMESTAMP,
+                            last_updated         = CURRENT_TIMESTAMP,
+                            last_updated_source  = 'AUTO'
+                        WHERE id = ?
+                        """,
+                        (deal_id,),
+                    )
+                    conn.commit()
 
+                pdf_path.unlink(missing_ok=True)
+                continue
             content_hash = hashlib.sha256(html.encode()).hexdigest()
 
             # -------- INDUSTRY / SECTOR (AUTHORITATIVE, RESTORED) --------
