@@ -115,20 +115,27 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                 current_identifier = deal["source_listing_id"] or ""
 
                 if "sold" in title.lower() or "/sold" in url.lower():
-                    print("⚠️ Marked SOLD — setting Lost")
+                    canonical_id = (
+                        current_identifier
+                        if current_identifier.startswith("TW-SOLD-")
+                        else f"TW-SOLD-{current_identifier}"
+                    )
+                    print("⚠️ Marked SOLD — canonicalising + setting Lost")
                     if not DRY_RUN:
                         conn.execute(
                             """
                             UPDATE deals
-                            SET status = 'Lost',
-                                lost_reason = 'Marked SOLD in listing',
+                            SET source_listing_id    = ?,
+                                status               = 'Lost',
+                                lost_reason          = 'Marked SOLD in listing',
                                 needs_detail_refresh = 0,
-                                detail_fetched_at = ?,
-                                last_updated = CURRENT_TIMESTAMP,
-                                last_updated_source = 'AUTO'
+                                detail_fetched_at    = ?,
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
                             WHERE id = ?
                             """,
                             (
+                                canonical_id,
                                 datetime.utcnow().isoformat(timespec="seconds"),
                                 deal["id"],
                             ),
@@ -306,6 +313,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                             notes = ?,
                             pdf_drive_url = ?,
                             drive_folder_id = ?,
+                            drive_folder_url = 'https://drive.google.com/drive/folders/' || ?,
                             detail_fetched_at = ?,
                             needs_detail_refresh = 0,
                             last_updated = CURRENT_TIMESTAMP,

@@ -1,21 +1,11 @@
 import sqlite3
 from pathlib import Path
 
-from src.sector_mappings.knightsbridge import KNIGHTSBRIDGE_SECTOR_MAP
+from src.sector_mappings.knightsbridge import (
+    resolve_knightsbridge_sector,
+)
 
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
-
-def map_knightsbridge_sector(sector_raw: str):
-    mapping = KNIGHTSBRIDGE_SECTOR_MAP.get(sector_raw)
-    if not mapping:
-        raise RuntimeError(f"UNMAPPED_KNIGHTSBRIDGE_SECTOR: {sector_raw}")
-
-    return (
-        mapping["industry"],
-        mapping["sector"],
-        mapping["confidence"],
-        mapping["reason"],
-    )
 
 
 def backfill_knightsbridge_sectors(dry_run: bool = False):
@@ -30,29 +20,34 @@ def backfill_knightsbridge_sectors(dry_run: bool = False):
         SELECT id, source_listing_id, sector_raw
         FROM deals
         WHERE source = 'Knightsbridge'
-          AND (industry IS NULL OR sector IS NULL)
+          AND (
+                industry IS NULL
+             OR sector_source IS NULL
+          )
         ORDER BY source_listing_id
         """
     ).fetchall()
 
     if not rows:
         print("✅ Nothing to backfill")
+        conn.close()
         return
 
     updated = 0
 
     try:
         for r in rows:
-            deal_id = r["id"]
-            sector_raw = r["sector_raw"]
-
-            industry, sector, confidence, reason = map_knightsbridge_sector(
-                sector_raw
-            )
+            (
+                industry,
+                sector,
+                sector_source,
+                confidence,
+                reason,
+            ) = resolve_knightsbridge_sector(r["sector_raw"])
 
             print(
                 f"KB {r['source_listing_id']}: "
-                f"{sector_raw} → {industry} / {sector}"
+                f"{r['sector_raw']} → {industry} / {sector} [{sector_source}]"
             )
 
             if not dry_run:
@@ -61,7 +56,7 @@ def backfill_knightsbridge_sectors(dry_run: bool = False):
                     UPDATE deals
                     SET industry                    = ?,
                         sector                      = ?,
-                        sector_source               = 'broker',
+                        sector_source               = ?,
                         sector_inference_confidence = ?,
                         sector_inference_reason     = ?
                     WHERE id = ?
@@ -69,9 +64,10 @@ def backfill_knightsbridge_sectors(dry_run: bool = False):
                     (
                         industry,
                         sector,
+                        sector_source,
                         confidence,
                         reason,
-                        deal_id,
+                        r["id"],
                     ),
                 )
                 updated += 1

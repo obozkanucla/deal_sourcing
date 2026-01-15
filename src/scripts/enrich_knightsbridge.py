@@ -117,6 +117,14 @@ def _extract_asking_price_k(page) -> Optional[int]:
     except Exception:
         return None
 
+def normalize_knightsbridge_sector(s: str | None) -> str | None:
+    if not s:
+        return None
+    return (
+        s.replace("\xa0", " ")
+         .replace("&amp;", "&")
+         .strip()
+    )
 # ---------------------------------------------------------------------
 # ENRICHMENT
 # ---------------------------------------------------------------------

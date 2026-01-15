@@ -26,7 +26,9 @@ from src.integrations.drive_folders import CANONICAL_INDUSTRY_FOLDERS
 # CONFIG
 # =========================================================
 
-BROKER_NAME = "DealOpportunities"
+# BROKER_NAME = "DealOpportunities"
+BROKER_NAME = "Knightsbridge"
+assert BROKER_NAME == "Knightsbridge", "BROKER_NAME mismatch — aborting"
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 
 DRY_RUN = False   # ⛔ SET TO False TO ACTUALLY DELETE
@@ -53,7 +55,7 @@ def cleanup_sqlite(broker: str):
 
     print(f"  Found {count} deals for broker='{broker}'")
 
-    if DRY_RUN or not SQL_DELETE:
+    if DRY_RUN and SQL_DELETE:
         print("  🧪 DRY_RUN — no rows deleted")
     else:
         cur.execute(

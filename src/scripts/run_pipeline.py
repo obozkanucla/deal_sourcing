@@ -12,13 +12,13 @@ SCRIPTS = [
     # "import_dmitry_deals.py",
     #
     # # Phase 1
-    # "import_axispartnership.py",
-    # "import_businessbuyers.py",
-    # "import_businesses4sale.py",
-    # "import_dealopportunities.py",
-    # "import_knightsbridge.py",
-    # "import_hiltonsmythe.py",
-    # "import_transworld.py",
+    "import_axispartnership.py",
+    "import_businessbuyers.py",
+    "import_businesses4sale.py",
+    "import_dealopportunities.py",
+    "import_knightsbridge.py",
+    "import_hiltonsmythe.py",
+    "import_transworld.py",
 
     # Phase 2
     "enrich_axispartnership.py",

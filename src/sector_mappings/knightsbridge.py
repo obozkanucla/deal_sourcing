@@ -1,3 +1,11 @@
+def canonicalize_sector_key(s: str) -> str:
+    return (
+        s.replace("\xa0", " ")
+         .replace("&amp;", "&")
+         .strip()
+         .lower()
+    )
+
 KNIGHTSBRIDGE_SECTOR_MAP = {
 
     # ------------------------------------------------------------------
@@ -69,6 +77,8 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "confidence": 0.6,
         "reason": "Explicit broker catch-all",
     },
+
+
 
     # ------------------------------------------------------------------
     # CONSTRUCTION & BUILT ENVIRONMENT
@@ -386,3 +396,32 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "reason": "Explicit broker miscellaneous category",
     },
 }
+
+_CANONICAL_KB_MAP = {
+    canonicalize_sector_key(k): v
+    for k, v in KNIGHTSBRIDGE_SECTOR_MAP.items()
+}
+
+def resolve_knightsbridge_sector(sector_raw: str | None):
+    if not sector_raw:
+        return (
+            "Other",
+            None,
+            "inferred",
+            0.2,
+            "Knightsbridge listing missing sector at source",
+        )
+
+    key = canonicalize_sector_key(sector_raw)
+    mapping = _CANONICAL_KB_MAP.get(key)
+
+    if not mapping:
+        raise RuntimeError(f"UNMAPPED_KNIGHTSBRIDGE_SECTOR: {sector_raw}")
+
+    return (
+        mapping["industry"],
+        mapping["sector"],
+        "broker",
+        mapping["confidence"],
+        mapping["reason"],
+    )
