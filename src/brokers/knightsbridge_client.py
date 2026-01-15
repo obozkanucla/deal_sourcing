@@ -69,8 +69,6 @@ class KnightsbridgeClient:
         "Wholesale & Retail": "2250",
         "Windows & Doors": "2457",
     }
-    # HEADLESS = False
-    HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     BASE_SLEEP = 1.2
     JITTER = 0.8
 
@@ -87,15 +85,18 @@ class KnightsbridgeClient:
         self.browser = None
         self.page = None
         self._playwright = None
-        self.HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
+        self.HEADLESS = False # os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     # ------------------------------------------------------------------
     # LIFECYCLE
     # ------------------------------------------------------------------
 
     def start(self):
-        print("🚀 Starting Knightsbridge client")
+        print("🚀 Starting Knightsbridge client (headless =", self.HEADLESS, ")")
         self._playwright = sync_playwright().start()
-        self.browser = self._playwright.chromium.launch(headless=os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1")
+        self.browser = self._playwright.chromium.launch(
+            headless=self.HEADLESS,
+            slow_mo=100  # optional, highly recommended for observing Cookiebot
+        )
         self.page = self.browser.new_page()
 
     def stop(self):

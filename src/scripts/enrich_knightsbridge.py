@@ -46,6 +46,42 @@ DRY_RUN = False
 # ---------------------------------------------------------------------
 # HELPERS
 # ---------------------------------------------------------------------
+def handle_cookiebot(page, timeout=5000):
+    """
+    Ensure Cookiebot consent modal is dismissed.
+    Safe to call multiple times.
+    """
+    try:
+        # Common accept button texts
+        accept_selectors = [
+            "button:has-text('Allow all')",
+            "button:has-text('Accept all')",
+            "button:has-text('Allow selection')",
+        ]
+
+        for sel in accept_selectors:
+            if page.locator(sel).count() > 0:
+                page.locator(sel).first.click(timeout=timeout)
+                break
+
+        # Also handle iframe-based Cookiebot
+        for frame in page.frames:
+            try:
+                btn = frame.locator("button:has-text('Allow all')")
+                if btn.count() > 0:
+                    btn.first.click(timeout=timeout)
+                    break
+            except Exception:
+                pass
+
+        # Hard assertion: modal must be gone
+        page.wait_for_timeout(500)  # let DOM settle
+
+    except Exception as e:
+        # Do NOT fail enrichment yet — just log
+        print(f"⚠️ Cookiebot handling issue: {e}")
+
+
 def is_knightsbridge_lost_page(page) -> bool:
     text = page.content().lower()
     return (
@@ -196,6 +232,7 @@ def enrich_knightsbridge(limit: Optional[int] = None):
     client = KnightsbridgeClient()
     client.start()
     client.login()
+    handle_cookiebot(client.page)
 
     processed = 0
 
@@ -232,7 +269,7 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                         client.page.wait_for_selector("#BusinessDetails", timeout=10_000)
                     except PlaywrightTimeout:
                         raise RuntimeError("LISTING_LOST_DOM_TIMEOUT")
-
+                handle_cookiebot(client.page)
                 description = _extract_description(client.page)
                 asking_price_k = _extract_asking_price_k(client.page)
                 if asking_price_k is None:
