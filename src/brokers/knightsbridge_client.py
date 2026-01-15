@@ -85,7 +85,7 @@ class KnightsbridgeClient:
         self.browser = None
         self.page = None
         self._playwright = None
-        self.HEADLESS = False # os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
+        self.HEADLESS = True # os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     # ------------------------------------------------------------------
     # LIFECYCLE
     # ------------------------------------------------------------------
