@@ -25,9 +25,10 @@ with repo.get_conn() as conn:
                       AND description IS NULL
                       AND industry IS NULL;
                 """)
-    conn.execute("""ALTER TABLE deals
-                    ADD COLUMN added_at DATE;
-                    """)
+    if not column_exists(conn, "deals", "added_at"):
+        conn.execute("""ALTER TABLE deals
+                        ADD COLUMN added_at DATE;
+                        """)
     conn.execute("""UPDATE deals
                     SET drive_folder_url = 'https://drive.google.com/drive/folders/' || drive_folder_id
                     WHERE source = 'transworld_uk'
@@ -70,7 +71,8 @@ with repo.get_conn() as conn:
                     WHERE deal_id NOT IN (SELECT id FROM deals);""")
     conn.execute("""DELETE FROM deals
                     WHERE source = 'Knightsbridge';""")
-
+    conn.execute("""DELETE FROM deal_artifacts
+                    WHERE deal_id NOT IN (SELECT id FROM deals);""")
 
     # conn.execute("""UPDATE deals
     #                 SET first_seen = '2026-01-12 09:00:00'
