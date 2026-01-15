@@ -35,6 +35,12 @@ jobs:
       GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
 
       # -----------------------------
+      # Knightsbridge credentials
+      # -----------------------------
+      KB_USERNAME: ${{ secrets.KB_USERNAME }}
+      KB_PASSWORD: ${{ secrets.KB_PASSWORD }}
+
+      # -----------------------------
       # Pipeline safety
       # -----------------------------
       PIPELINE_ENV: prod
