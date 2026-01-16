@@ -120,6 +120,18 @@ def main():
 
     for r in records:
         now = datetime.utcnow().isoformat(timespec="seconds")
+        existing = repo.get_conn().execute(
+            """
+            SELECT 1
+            FROM deals
+            WHERE source = ?
+              AND source_url = ? LIMIT 1
+            """,
+            ("transworld_uk", r["source_url"]),
+        ).fetchone()
+
+        if existing:
+            continue
 
         repo.upsert_index_only(
             source=r["source"],
