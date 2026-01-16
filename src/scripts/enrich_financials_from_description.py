@@ -75,9 +75,9 @@ def main():
             print("UPDATES:", updates)
         else:
             repo.update_deal_fields(
-                deal["source"],
-                deal["source_listing_id"],
-                updates
+                source=deal["source"],
+                source_listing_id=deal["source_listing_id"],
+                updates=updates,
             )
             updated += 1
 

@@ -22,6 +22,7 @@ DEAL_COLUMNS = [
     ColumnSpec("sector", push=True, pull=False),
     ColumnSpec("location", push=True, pull=False),
     ColumnSpec("incorporation_year", push=True, pull=False, system=True),
+    ColumnSpec("sector_raw", push=True, pull=False),
 
     # --- Assets ---
     ColumnSpec("drive_folder_url", push=True, pull=False, system=True),

@@ -113,7 +113,15 @@ def extract_financial_metrics(description: str) -> Dict[str, dict]:
     # Revenue / Turnover
     # --------------------------
     if m := RE_REVENUE.search(text):
-        raw = float(m.group(2).replace(",", ""))
+        num = m.group(2)
+        if not num:
+            return out
+
+        num = num.replace(",", "").strip()
+        if not num:
+            return out
+
+        raw = float(num)
         unit = m.group(3)
         value = normalize_from_description(raw, unit)
         if value is not None:
@@ -126,7 +134,15 @@ def extract_financial_metrics(description: str) -> Dict[str, dict]:
     # EBITDA
     # --------------------------
     if m := RE_EBITDA.search(text):
-        raw = float(m.group(2).replace(",", ""))
+        num = m.group(2)
+        if not num:
+            return out
+
+        num = num.replace(",", "").strip()
+        if not num:
+            return out
+
+        raw = float(num)
         unit = m.group(3)
         value = normalize_from_description(raw, unit)
         if value is not None:
@@ -139,7 +155,15 @@ def extract_financial_metrics(description: str) -> Dict[str, dict]:
     # Asking price / valuation
     # --------------------------
     if m := RE_ASKING.search(text):
-        raw = float(m.group(2).replace(",", ""))
+        num = m.group(2)
+        if not num:
+            return out
+
+        num = num.replace(",", "").strip()
+        if not num:
+            return out
+
+        raw = float(num)
         unit = m.group(3)
         value = normalize_from_description(raw, unit)
         if value is not None:
