@@ -33,7 +33,7 @@ PDF_ROOT = Path("/tmp/knightsbridge_pdfs")
 PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
 KNIGHTSBRIDGE_BASE = "https://www.knightsbridgeplc.com"
-
+REPORT_FREQUENCY = 5
 RESTART_EVERY = 50
 BASE_SLEEP = 1.2
 JITTER = 0.8
@@ -221,6 +221,9 @@ def enrich_knightsbridge(limit: Optional[int] = None):
     rows = repo.fetch_deals_for_enrichment(
         source="Knightsbridge",
     )
+    total = len(rows)
+
+    print(f"🔍 Knightsbridge enrichment starting — {total} eligible deals")
 
     if limit:
         rows = rows[:limit]
@@ -237,6 +240,7 @@ def enrich_knightsbridge(limit: Optional[int] = None):
     processed = 0
 
     try:
+        processed = 0
         for r in rows:
             error: Exception | None = None
             success = False
@@ -245,8 +249,17 @@ def enrich_knightsbridge(limit: Optional[int] = None):
             url        = r["source_url"]
             raw_title = r["title"]
             title = clean_and_shorten_title(raw_title)
-
+            remaining = total - processed
             processed += 1
+            if processed % REPORT_FREQUENCY == 0:
+                print(
+                    f"📊 Progress: {processed}/{total} | "
+                    # f"✅ {succeeded} enriched | "
+                    # f"⏸️ {parked} parked | "
+                    # f"❌ {failed} retryable | "
+                    # f"⏳ {remaining} remaining"
+                )
+
             if processed % RESTART_EVERY == 0:
                 client.stop()
                 client = KnightsbridgeClient()
