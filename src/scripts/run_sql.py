@@ -9,70 +9,85 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
-                    ux_bb_source_url
-                    ON deals(source, source_url)
-                    WHERE source = 'BusinessBuyers';
-                    """)
-    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
-                    ux_b4s_source_url
-                    ON deals(source, source_url)
-                    WHERE source = 'BusinessesForSale';
+    conn.execute("""DELETE FROM deals
+                    WHERE source = 'transworld_uk'
+                      AND source_url IN (
+                          SELECT source_url
+                          FROM deals
+                          WHERE source = 'transworld_uk'
+                          GROUP BY source_url
+                          HAVING COUNT(*) > 1
+                      )
+                      AND source_listing_id NOT LIKE 'TW-%';
                  """)
-    conn.execute("""DELETE FROM deals
-                    WHERE source = 'BusinessBuyers'
-                      AND pdf_drive_url IS NULL
-                      AND description IS NULL
-                      AND industry IS NULL;
-                """)
-    if not column_exists(conn, "deals", "added_at"):
-        conn.execute("""ALTER TABLE deals
-                        ADD COLUMN added_at DATE;
-                        """)
-    conn.execute("""UPDATE deals
-                    SET drive_folder_url = 'https://drive.google.com/drive/folders/' || drive_folder_id
-                    WHERE source = 'transworld_uk'
-                      AND drive_folder_id IS NOT NULL
-                      AND drive_folder_url IS NULL;""")
-    conn.execute("""DELETE FROM deals
-                    WHERE source = 'transworld_uk'
-                    AND source_listing_id NOT LIKE 'TW-%'
-                    AND EXISTS (
-                    SELECT 1
-                    FROM deals d2
-                    WHERE d2.source = 'transworld_uk'
-                    AND d2.source_listing_id LIKE 'TW-%'
-                    AND d2.source_url = deals.source_url
-                    );""")
-    conn.execute("""UPDATE deals
-                    SET source_listing_id = 'TW-SOLD-' || source_listing_id
-                    WHERE source = 'transworld_uk'
-                      AND status = 'Lost'
-                      AND source_listing_id NOT LIKE 'TW-%';""")
-    conn.execute("""UPDATE deals
-                    SET
-                        industry = NULL,
-                        sector = NULL,
-                        sector_source = NULL,
-                        sector_inference_confidence = NULL,
-                        sector_inference_reason = NULL,
-                        drive_folder_id = NULL,
-                        drive_folder_url = NULL,
-                        pdf_drive_url = NULL,
-                        needs_detail_refresh = 1,
-                        detail_fetched_at = NULL,
-                        detail_fetch_reason = NULL
-                    WHERE source = 'Knightsbridge'
-                      AND drive_folder_id IS NULL
-                      AND status IS NULL;
-                    """)
-    conn.execute("""DELETE FROM deal_artifacts WHERE deal_id IS NULL;""")
-    conn.execute("""DELETE FROM deal_artifacts
-                    WHERE deal_id NOT IN (SELECT id FROM deals);""")
-    conn.execute("""DELETE FROM deals
-                    WHERE source = 'Knightsbridge';""")
-    conn.execute("""DELETE FROM deal_artifacts
-                    WHERE deal_id NOT IN (SELECT id FROM deals);""")
+    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
+                    ux_tw_source_url
+                    ON deals(source, source_url)
+                    WHERE source = 'transworld_uk';""")
+    # conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
+    #                 ux_bb_source_url
+    #                 ON deals(source, source_url)
+    #                 WHERE source = 'BusinessBuyers';
+    #                 """)
+    # conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
+    #                 ux_b4s_source_url
+    #                 ON deals(source, source_url)
+    #                 WHERE source = 'BusinessesForSale';
+    #              """)
+    # conn.execute("""DELETE FROM deals
+    #                 WHERE source = 'BusinessBuyers'
+    #                   AND pdf_drive_url IS NULL
+    #                   AND description IS NULL
+    #                   AND industry IS NULL;
+    #             """)
+    # if not column_exists(conn, "deals", "added_at"):
+    #     conn.execute("""ALTER TABLE deals
+    #                     ADD COLUMN added_at DATE;
+    #                     """)
+    # conn.execute("""UPDATE deals
+    #                 SET drive_folder_url = 'https://drive.google.com/drive/folders/' || drive_folder_id
+    #                 WHERE source = 'transworld_uk'
+    #                   AND drive_folder_id IS NOT NULL
+    #                   AND drive_folder_url IS NULL;""")
+    # conn.execute("""DELETE FROM deals
+    #                 WHERE source = 'transworld_uk'
+    #                 AND source_listing_id NOT LIKE 'TW-%'
+    #                 AND EXISTS (
+    #                 SELECT 1
+    #                 FROM deals d2
+    #                 WHERE d2.source = 'transworld_uk'
+    #                 AND d2.source_listing_id LIKE 'TW-%'
+    #                 AND d2.source_url = deals.source_url
+    #                 );""")
+    # conn.execute("""UPDATE deals
+    #                 SET source_listing_id = 'TW-SOLD-' || source_listing_id
+    #                 WHERE source = 'transworld_uk'
+    #                   AND status = 'Lost'
+    #                   AND source_listing_id NOT LIKE 'TW-%';""")
+    # conn.execute("""UPDATE deals
+    #                 SET
+    #                     industry = NULL,
+    #                     sector = NULL,
+    #                     sector_source = NULL,
+    #                     sector_inference_confidence = NULL,
+    #                     sector_inference_reason = NULL,
+    #                     drive_folder_id = NULL,
+    #                     drive_folder_url = NULL,
+    #                     pdf_drive_url = NULL,
+    #                     needs_detail_refresh = 1,
+    #                     detail_fetched_at = NULL,
+    #                     detail_fetch_reason = NULL
+    #                 WHERE source = 'Knightsbridge'
+    #                   AND drive_folder_id IS NULL
+    #                   AND status IS NULL;
+    #                 """)
+    # conn.execute("""DELETE FROM deal_artifacts WHERE deal_id IS NULL;""")
+    # conn.execute("""DELETE FROM deal_artifacts
+    #                 WHERE deal_id NOT IN (SELECT id FROM deals);""")
+    # conn.execute("""DELETE FROM deals
+    #                 WHERE source = 'Knightsbridge';""")
+    # conn.execute("""DELETE FROM deal_artifacts
+    #                 WHERE deal_id NOT IN (SELECT id FROM deals);""")
 
     # conn.execute("""UPDATE deals
     #                 SET first_seen = '2026-01-12 09:00:00'
