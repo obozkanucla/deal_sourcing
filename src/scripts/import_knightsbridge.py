@@ -7,6 +7,11 @@ from src.sector_mappings.knightsbridge import (
     resolve_knightsbridge_sector
 )
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
+from src.config import KB_USERNAME, KB_PASSWORD
+
+if not KB_USERNAME or not KB_PASSWORD:
+    print("⏭️ Skipping Knightsbridge import (credentials not set)")
+    exit(0)
 
 def normalize_knightsbridge_sector(s: str | None) -> str | None:
     if not s:

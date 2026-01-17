@@ -76,9 +76,6 @@ class KnightsbridgeClient:
     BASE_SLEEP = 1.2
     JITTER = 0.8
 
-    if not KB_USERNAME or not KB_PASSWORD:
-        raise RuntimeError("KB_USERNAME / KB_PASSWORD not set")
-
 
     # Proven sector values
     def __init__(self):
