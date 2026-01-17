@@ -22,7 +22,11 @@ jobs:
       # -----------------------------
       BB_USERNAME: ${{ secrets.BB_USERNAME }}
       BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
-
+      # -----------------------------
+      # Knightsbridge credentials
+      # -----------------------------
+      KB_USERNAME: ${{ secrets.KB_USERNAME }}
+      KB_PASSWORD: ${{ secrets.KB_PASSWORD }}
       # -----------------------------
       # Slack
       # -----------------------------
