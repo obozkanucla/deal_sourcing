@@ -9,21 +9,31 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""DELETE FROM deals
-                    WHERE source = 'transworld_uk'
-                      AND source_url IN (
-                          SELECT source_url
-                          FROM deals
-                          WHERE source = 'transworld_uk'
-                          GROUP BY source_url
-                          HAVING COUNT(*) > 1
-                      )
-                      AND source_listing_id NOT LIKE 'TW-%';
-                 """)
-    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
-                    ux_tw_source_url
-                    ON deals(source, source_url)
-                    WHERE source = 'transworld_uk';""")
+    conn.execute("""SELECT
+                      id,
+                      source_listing_id,
+                      status,
+                      detail_fetch_reason,
+                      detail_fetched_at
+                    FROM deals
+                    WHERE source = 'BusinessesForSale'
+                      AND status = 'Lost'
+                      AND detail_fetch_reason = 'listing_unavailable';""")
+    # conn.execute("""DELETE FROM deals
+    #                 WHERE source = 'transworld_uk'
+    #                   AND source_url IN (
+    #                       SELECT source_url
+    #                       FROM deals
+    #                       WHERE source = 'transworld_uk'
+    #                       GROUP BY source_url
+    #                       HAVING COUNT(*) > 1
+    #                   )
+    #                   AND source_listing_id NOT LIKE 'TW-%';
+    #              """)
+    # conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
+    #                 ux_tw_source_url
+    #                 ON deals(source, source_url)
+    #                 WHERE source = 'transworld_uk';""")
     # conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
     #                 ux_bb_source_url
     #                 ON deals(source, source_url)
