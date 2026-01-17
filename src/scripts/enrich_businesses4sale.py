@@ -20,7 +20,7 @@ from src.integrations.google_drive import (
     upload_pdf_to_drive,
 )
 from src.utils.financial_normalization import _normalize_money_to_k, _normalize_pct, normalize_from_description
-from src.utils.hash_utils import compute_file_hash
+from src.utils.hash_utils import compute_content_hash, compute_file_hash
 
 # -------------------------------------------------
 # CONFIG
@@ -30,7 +30,7 @@ DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 PDF_ROOT = Path("/tmp/businesses4sale_pdfs")
 PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
-DETAIL_WAIT_SELECTOR = "#hero, div.teaser-content"
+DETAIL_WAIT_SELECTOR = "body"
 SLEEP_BETWEEN = (3, 6)
 DRY_RUN = False
 
@@ -191,27 +191,45 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                     page.goto(url, timeout=60_000)
                     page.wait_for_selector(DETAIL_WAIT_SELECTOR, timeout=20_000)
                 except TimeoutError:
-                    print("⚠️ Listing unavailable — marking Lost")
+                    print("⚠️ Detail selector not found — marking UNKNOWN")
                     if not DRY_RUN:
                         conn.execute(
                             """
-                                UPDATE deals
-                                SET status = 'Lost',
-                                    detail_fetch_reason = 'listing_unavailable',
-                                    detail_fetched_at = CURRENT_TIMESTAMP,
-                                    needs_detail_refresh = 0,
-                                    last_updated = CURRENT_TIMESTAMP,
-                                    last_updated_source = 'AUTO'
-                                WHERE id = ?
-                                  AND (status IS NULL OR status != 'Lost')
+                            UPDATE deals
+                            SET detail_fetch_reason  = 'selector_timeout',
+                                detail_fetched_at    = CURRENT_TIMESTAMP,
+                                needs_detail_refresh = 1,
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?
                             """,
                             (row_id,),
                         )
                         conn.commit()
-                        context.close()
+                    context.close()
                     continue
 
                 soup = BeautifulSoup(page.content(), "html.parser")
+                html = page.content()
+                if is_b4s_lost(html):
+                    print("⚠️ Explicit B4S lost page detected")
+                    if not DRY_RUN:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET status               = 'Lost',
+                                detail_fetch_reason  = 'listing_unavailable',
+                                detail_fetched_at    = CURRENT_TIMESTAMP,
+                                needs_detail_refresh = 0,
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?
+                              AND (status IS NULL OR status != 'Lost')
+                            """,
+                            (row_id,),
+                        )
+                        conn.commit()
+                    continue
 
                 mv_id = extract_mv_id(soup)
                 if not mv_id:
@@ -299,9 +317,28 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                 profit_margin_pct = financials.get("profit_margin", {}).get("pct")
                 revenue_growth_pct = financials.get("revenue_growth", {}).get("pct")
                 leverage_pct = financials.get("leverage", {}).get("pct")
-
-                content_hash = compute_content_hash(title, location, description)
-
+                if not title or not description:
+                    print("⚠️ Incomplete content — skipping enrichment")
+                    if not DRY_RUN:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET detail_fetch_reason  = 'incomplete_content',
+                                needs_detail_refresh = 1,
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?
+                            """,
+                            (row_id,),
+                        )
+                        conn.commit()
+                    context.close()
+                    continue
+                content_hash = compute_content_hash(
+                    title=title,
+                    description=description,
+                    location=location,
+                )
                 # ---------- DRY RUN GUARD ----------
                 if DRY_RUN:
                     print("🔍 DRY RUN – mapped DB values")
