@@ -100,7 +100,17 @@ jobs:
 
           print("\n--- row count ---")
           print(cur.execute("SELECT COUNT(*) FROM deals").fetchone())
-
+          
+          print(cur.execute("SELECT
+                      id,
+                      source_listing_id,
+                      status,
+                      detail_fetch_reason,
+                      detail_fetched_at
+                    FROM deals
+                    WHERE source = 'BusinessesForSale'
+                      AND status = 'Lost'
+                      AND detail_fetch_reason = 'listing_unavailable'"))
           conn.close()
           EOF
 

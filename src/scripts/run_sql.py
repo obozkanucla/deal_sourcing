@@ -19,6 +19,17 @@ with repo.get_conn() as conn:
                     WHERE source = 'BusinessesForSale'
                       AND status = 'Lost'
                       AND detail_fetch_reason = 'listing_unavailable';""")
+    conn.execute("""UPDATE deals
+                    SET
+                      status               = NULL,
+                      detail_fetch_reason  = 'reverted_false_lost',
+                      needs_detail_refresh = 1,
+                      last_updated         = CURRENT_TIMESTAMP,
+                      last_updated_source  = 'MANUAL_FIX'
+                    WHERE source = 'BusinessesForSale'
+                      AND status = 'Lost'
+                      AND detail_fetch_reason = 'listing_unavailable';
+    """)
     # conn.execute("""DELETE FROM deals
     #                 WHERE source = 'transworld_uk'
     #                   AND source_url IN (
