@@ -131,12 +131,11 @@ jobs:
       # Detect script-level failures
       # --------------------------------------------------
       - name: Detect script failures
-        id: detect_failures
         if: always()
         run: |
           if [ -f pipeline_failures.json ]; then
             echo "HAS_FAILURES=true" >> $GITHUB_ENV
-            echo "FAILED_SCRIPTS=$(cat pipeline_failures.json)" >> $GITHUB_ENV
+            echo "FAILED_SCRIPTS_TEXT=$(jq -r '.[]' pipeline_failures.json | sed 's/^/- /')" >> $GITHUB_ENV
           else
             echo "HAS_FAILURES=false" >> $GITHUB_ENV
           fi
@@ -144,7 +143,6 @@ jobs:
       # --------------------------------------------------
       # SLACK Notifications
       # --------------------------------------------------
-
       - name: Notify Slack – Failure
         if: env.HAS_FAILURES == 'true'
         uses: slackapi/slack-github-action@v1
@@ -152,7 +150,7 @@ jobs:
           channel-id: ${{ secrets.SLACK_PIPELINE_JOB_UPDATE_CHANNEL_ID }}
           payload: |
             {
-              "text": "*${{ github.workflow }}*\nStatus: *FAILED*\nFailed scripts:\n${{ env.FAILED_SCRIPTS }}\nDuration: *${{ env.JOB_DURATION_MIN }} min*\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+              "text": "*${{ github.workflow }}*\nStatus: *FAILED*\nFailed scripts:\n${{ env.FAILED_SCRIPTS_TEXT }}\nDuration: *${{ env.JOB_DURATION_MIN }} min*\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
             }
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
