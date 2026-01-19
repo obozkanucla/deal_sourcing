@@ -1,4 +1,4 @@
-name: Deal Sourcing Pipeline
+name: Pipeline - Post Processing
 
 on:
 #  schedule:
@@ -95,10 +95,10 @@ jobs:
         run: python -m src.scripts.import_dmitry_deals
 
       # --------------------------------------------------
-      # Phase 1 — Broker Imports
+      # Phase 1 — Post Processing
       # --------------------------------------------------
       - name: Infer sectors + move Drive folders
-        run: python -m src.scripts.run_pipeline_imports
+        run: python -m src.scripts.run_pipeline_postprocess
 
       # --------------------------------------------------
       # Phase 3 — Sync outputs
