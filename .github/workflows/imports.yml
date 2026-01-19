@@ -1,0 +1,134 @@
+name: Deal Sourcing Pipeline
+
+on:
+#  schedule:
+#    - cron: "* * * * *"   # daily at 6:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write   # required for GitHub Releases
+  actions: read
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      PLAYWRIGHT_HEADLESS: "1"
+
+      # -----------------------------
+      # Broker credentials
+      # -----------------------------
+      BB_USERNAME: ${{ secrets.BB_USERNAME }}
+      BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
+      # -----------------------------
+      # Knightsbridge credentials
+      # -----------------------------
+      KB_USERNAME: ${{ secrets.KB_USERNAME }}
+      KB_PASSWORD: ${{ secrets.KB_PASSWORD }}
+      # -----------------------------
+      # Slack
+      # -----------------------------
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+
+      # -----------------------------
+      # Google APIs (OAuth user)
+      # -----------------------------
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+
+      # -----------------------------
+      # Pipeline safety
+      # -----------------------------
+      PIPELINE_ENV: github
+
+    steps:
+      # --------------------------------------------------
+      # Checkout code
+      # --------------------------------------------------
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # Python
+      # --------------------------------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # --------------------------------------------------
+      # Playwright
+      # --------------------------------------------------
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install chromium --with-deps
+
+      # --------------------------------------------------
+      # Restore canonical SQLite DB from GitHub Release
+      # --------------------------------------------------
+      - name: Download latest SQLite DB from release (if exists)
+        run: |
+          mkdir -p db
+          gh release download db-latest \
+            --pattern deals.sqlite \
+            --output db/deals.sqlite \
+            --clobber || echo "No existing DB found — starting fresh"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --------------------------------------------------
+      # Phase 0 — Legacy imports
+      # --------------------------------------------------
+      - name: Import legacy deals
+        run: python -m src.scripts.import_legacy_deals
+
+      - name: Import Dmitry deals
+        run: python -m src.scripts.import_dmitry_deals
+
+      # --------------------------------------------------
+      # Phase 1 — Broker Imports
+      # --------------------------------------------------
+      - name: Infer sectors + move Drive folders
+        run: python -m src.scripts.run_pipeline_imports
+
+      # --------------------------------------------------
+      # Phase 3 — Sync outputs
+      # --------------------------------------------------
+      - name: Sync SQLite → Google Sheets
+        run: python -m src.scripts.sync_to_sheets
+
+      # --------------------------------------------------
+      # Persist canonical SQLite snapshot
+      # --------------------------------------------------
+      - name: Publish SQLite snapshot to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: db-latest
+          name: Deal Pipeline SQLite (Latest)
+          files: db/deals.sqlite
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --------------------------------------------------
+      # SLACK Notifications
+      # --------------------------------------------------
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "*Imports pipeline* finished\nStatus: ${{ job.status }}\nWorkflow: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
