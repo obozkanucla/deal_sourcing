@@ -46,6 +46,8 @@ jobs:
       PIPELINE_ENV: github
 
     steps:
+      - name: Record start time
+        run: echo "JOB_START_TS=$(date +%s)" >> $GITHUB_ENV
       # --------------------------------------------------
       # Checkout code
       # --------------------------------------------------
@@ -118,11 +120,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Record end time
+        if: always()
+        run: echo "JOB_END_TS=$(date +%s)" >> $GITHUB_ENV
+
       # --------------------------------------------------
       # SLACK Notifications
       # --------------------------------------------------
-      - name: Capture end time
-        run: echo "END_TIME=$(date +%s)" >> $GITHUB_ENV
 
       - name: Notify Slack
         if: always()
