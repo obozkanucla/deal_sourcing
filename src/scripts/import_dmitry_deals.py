@@ -124,6 +124,22 @@ def parse_k_number(val):
         return float(v)
     except ValueError:
         return None
+import time
+from gspread.exceptions import APIError
+
+def get_all_values_with_retry(ws, retries=5, base_delay=2):
+    for attempt in range(1, retries + 1):
+        try:
+            return ws.get_all_values()
+        except APIError as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status != 503:
+                raise
+            if attempt == retries:
+                raise
+            sleep = base_delay * attempt
+            print(f"⚠️ Google Sheets 503, retry {attempt}/{retries} in {sleep}s")
+            time.sleep(sleep)
 
 # -------------------------------------------------
 # MAIN
@@ -141,8 +157,11 @@ def main():
 
     for sheet_name, sheet_date in SHEETS.items():
         ws = sh.worksheet(sheet_name)
-        values = ws.get_all_values()
+        values = get_all_values_with_retry(ws)
 
+        if not values or len(values) < 2:
+            print(f"⚠️ Sheet {sheet_name} is empty or malformed, skipping")
+            continue
         headers = values[0]
         rows = values[1:]
 
