@@ -128,17 +128,43 @@ jobs:
           echo "JOB_DURATION_MIN=$(( (JOB_END_TS - JOB_START_TS) / 60 ))" >> $GITHUB_ENV
 
       # --------------------------------------------------
+      # Detect script-level failures
+      # --------------------------------------------------
+      - name: Detect script failures
+        id: detect_failures
+        if: always()
+        run: |
+          if [ -f pipeline_failures.json ]; then
+            echo "HAS_FAILURES=true" >> $GITHUB_ENV
+            echo "FAILED_SCRIPTS=$(cat pipeline_failures.json)" >> $GITHUB_ENV
+          else
+            echo "HAS_FAILURES=false" >> $GITHUB_ENV
+          fi
+
+      # --------------------------------------------------
       # SLACK Notifications
       # --------------------------------------------------
 
-      - name: Notify Slack
-        if: always()
+      - name: Notify Slack – Failure
+        if: env.HAS_FAILURES == 'true'
         uses: slackapi/slack-github-action@v1
         with:
           channel-id: ${{ secrets.SLACK_PIPELINE_JOB_UPDATE_CHANNEL_ID }}
           payload: |
             {
-              "text": "*${{ github.workflow }}*\nStatus: *${{ job.status }}*\nDuration: *${{ env.JOB_DURATION_MIN }} min*\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+              "text": "*${{ github.workflow }}*\nStatus: *FAILED*\nFailed scripts:\n${{ env.FAILED_SCRIPTS }}\nDuration: *${{ env.JOB_DURATION_MIN }} min*\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Notify Slack – Success
+        if: env.HAS_FAILURES != 'true'
+        uses: slackapi/slack-github-action@v1
+        with:
+          channel-id: ${{ secrets.SLACK_PIPELINE_JOB_UPDATE_CHANNEL_ID }}
+          payload: |
+            {
+              "text": "*${{ github.workflow }}*\nStatus: *SUCCESS*\nDuration: *${{ env.JOB_DURATION_MIN }} min*\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
             }
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

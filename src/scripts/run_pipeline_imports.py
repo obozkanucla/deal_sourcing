@@ -1,12 +1,11 @@
 import time
-import subprocess
-import sys
-from pathlib import Path
 import os
+import json
+from pathlib import Path
+
+from src.utils.run_scripts import run_script
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SCRIPTS_DIR = PROJECT_ROOT / "src" / "scripts"
-from src.utils.run_scripts import run_script
 
 SCRIPTS = [
     "import_axispartnership.py",
@@ -16,34 +15,49 @@ SCRIPTS = [
     "import_knightsbridge.py",
     "import_hiltonsmythe.py",
     "import_transworld.py",
-
-    # "enrich_axispartnership.py",
-    # "enrich_businessbuyers.py",
-    # "enrich_businesses4sale.py",
-    # "enrich_dealopportunities.py",
-    # "enrich_knightsbridge.py",
-    # "enrich_hiltonsmythe.py",
-    # "enrich_transworld.py",
-    #
-    # "infer_sectors.py",
-    # "enrich_financials_from_description.py",
-    # "recalculate_financial_metrics.py",
-    # "sync_to_sheets.py",
 ]
+
+FAILURE_REPORT_PATH = PROJECT_ROOT / "pipeline_failures.json"
+
 
 def main():
     timings = []
+    failed_scripts = []
 
     for script in SCRIPTS:
         elapsed, status = run_script(script)
         timings.append((script, elapsed, status))
 
+        if status != "ok":
+            failed_scripts.append(script)
+
+    # -----------------------------
+    # Timing summary (unchanged)
+    # -----------------------------
     print("\n📊 PIPELINE TIMING SUMMARY")
-    for script, elapsed, status in sorted(timings, key=lambda x: x[1], reverse=True):
+    for script, elapsed, status in sorted(
+        timings, key=lambda x: x[1], reverse=True
+    ):
         print(f"{elapsed:7.1f}s  {status:6}  {script}")
 
     total = sum(t for _, t, _ in timings)
     print(f"\n⏱️ TOTAL PIPELINE TIME: {total/60:.1f} minutes")
+
+    # -----------------------------
+    # Failure signal for GitHub Actions
+    # -----------------------------
+    if failed_scripts:
+        with open(FAILURE_REPORT_PATH, "w") as f:
+            json.dump(failed_scripts, f)
+
+        print(
+            f"\n⚠️ {len(failed_scripts)} script(s) failed. "
+            f"Details written to {FAILURE_REPORT_PATH}"
+        )
+    else:
+        # Ensure stale file never survives
+        if FAILURE_REPORT_PATH.exists():
+            FAILURE_REPORT_PATH.unlink()
 
 
 if __name__ == "__main__":
