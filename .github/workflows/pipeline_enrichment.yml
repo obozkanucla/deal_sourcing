@@ -130,6 +130,7 @@ jobs:
       # --------------------------------------------------
       # SLACK Notificationss
       # --------------------------------------------------
+
       - name: Notify Slack
         if: always()
         uses: slackapi/slack-github-action@v1
@@ -137,7 +138,7 @@ jobs:
           channel-id: ${{ secrets.SLACK_PIPELINE_JOB_UPDATE_CHANNEL_ID }}
           payload: |
             {
-              "text": "*${{ github.workflow }}*\nStatus: *${{ job.status }}*\nDuration: *$(( (${{ env.JOB_END_TS }} - ${{ env.JOB_START_TS }}) / 60 )) min*\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+              "text": "*${{ github.workflow }}*\nStatus: *${{ job.status }}*\nDuration: *${{ env.JOB_DURATION_MIN }} min*\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
             }
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
