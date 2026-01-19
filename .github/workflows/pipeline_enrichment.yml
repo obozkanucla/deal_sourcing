@@ -135,7 +135,12 @@ jobs:
         run: |
           if [ -f pipeline_failures.json ]; then
             echo "HAS_FAILURES=true" >> $GITHUB_ENV
-            echo "FAILED_SCRIPTS_TEXT=$(jq -r '.[]' pipeline_failures.json | sed 's/^/- /')" >> $GITHUB_ENV
+      
+            {
+              echo "FAILED_SCRIPTS_TEXT<<EOF"
+              jq -r '.[]' pipeline_failures.json | sed 's/^/- /'
+              echo "EOF"
+            } >> $GITHUB_ENV
           else
             echo "HAS_FAILURES=false" >> $GITHUB_ENV
           fi
