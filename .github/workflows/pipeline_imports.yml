@@ -120,9 +120,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Record end time
+      - name: Record end time and duration
         if: always()
-        run: echo "JOB_END_TS=$(date +%s)" >> $GITHUB_ENV
+        run: |
+          JOB_END_TS=$(date +%s)
+          echo "JOB_END_TS=$JOB_END_TS" >> $GITHUB_ENV
+          echo "JOB_DURATION_MIN=$(( (JOB_END_TS - JOB_START_TS) / 60 ))" >> $GITHUB_ENV
 
       # --------------------------------------------------
       # SLACK Notifications
