@@ -145,10 +145,17 @@ class KnightsbridgeClient:
             # --------------------------------------------------
             # Select sector
             # --------------------------------------------------
-            self.page.select_option(
-                "#ContentPlaceHolder1_ctl09_sector",
-                value=sector_value,
-            )
+            from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
+            sector = self.page.locator("#ContentPlaceHolder1_ctl09_sector")
+
+            try:
+                sector.wait_for(state="visible", timeout=10_000)
+                sector.wait_for(state="enabled", timeout=10_000)
+                sector.select_option(sector_value, timeout=5_000)
+            except PlaywrightTimeoutError:
+                raise RuntimeError(f"Sector dropdown not ready for {sector_name}")
+
             self._human_sleep(0.5)
 
             # --------------------------------------------------
