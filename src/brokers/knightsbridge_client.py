@@ -146,7 +146,7 @@ class KnightsbridgeClient:
             # Select sector
             # --------------------------------------------------
             self.page.select_option(
-                "#ContentPlaceHolder1_ctl09_subSector",
+                "#ContentPlaceHolder1_ctl09_sector",
                 value=sector_value,
             )
             self._human_sleep(0.5)

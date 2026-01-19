@@ -99,7 +99,7 @@ jobs:
       # --------------------------------------------------
       # Phase 1 — Broker Imports
       # --------------------------------------------------
-      - name: Infer sectors + move Drive folders
+      - name: Broker imports
         run: python -m src.scripts.run_pipeline_imports
 
       # --------------------------------------------------
