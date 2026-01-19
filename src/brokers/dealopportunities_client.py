@@ -86,7 +86,11 @@ class DealOpportunitiesClient:
         max_pages = max_pages or self.MAX_PAGES_PER_RUN
 
         print(f"📄 Loading DealOpportunities search page")
-        self.page.goto(self.BASE_URL, timeout=30_000)
+        self.page.goto(
+            self.BASE_URL,
+            timeout=30_000,
+            wait_until="domcontentloaded",
+        )
         self.page.wait_for_load_state("domcontentloaded")
 
         try:
