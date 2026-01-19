@@ -121,14 +121,17 @@ jobs:
       # --------------------------------------------------
       # SLACK Notifications
       # --------------------------------------------------
+      - name: Capture end time
+        run: echo "END_TIME=$(date +%s)" >> $GITHUB_ENV
 
       - name: Notify Slack
         if: always()
         uses: slackapi/slack-github-action@v1
         with:
+          channel-id: ${{ secrets.SLACK_PIPELINE_JOB_UPDATE_CHANNEL_ID }}
           payload: |
             {
-              "text": "*Imports pipeline* finished\nStatus: ${{ job.status }}\nWorkflow: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+              "text": "*${{ github.workflow }}*\nStatus: *${{ job.status }}*\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
             }
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
