@@ -40,7 +40,7 @@ JITTER = 0.8
 if not KB_USERNAME or not KB_PASSWORD:
     raise RuntimeError("KB_USERNAME / KB_PASSWORD not set")
 
-DRY_RUN = True
+DRY_RUN = False
 
 # ---------------------------------------------------------------------
 # HELPERS
