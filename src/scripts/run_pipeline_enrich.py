@@ -22,7 +22,7 @@ SCRIPTS = [
     "enrich_businessbuyers.py",
     "enrich_businesses4sale.py",
     "enrich_dealopportunities.py",
-    "enrich_knightsbridge.py",
+    # "enrich_knightsbridge.py",
     "enrich_hiltonsmythe.py",
     "enrich_transworld.py",
 

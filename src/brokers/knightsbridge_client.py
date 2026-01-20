@@ -9,65 +9,32 @@ KNIGHTSBRIDGE_BASE = "https://www.knightsbridgeplc.com"
 
 
 class KnightsbridgeClient:
-    BASE_URL = "https://www.knightsbridgeplc.com/buy-a-business/commercial/"
+    BASE_URL = "https://www.knightsbridgeplc.com/buy-a-business/search-our-listings/"
     SECTORS = {
-        "Advertising & Media": "2403",
-        "Architecture": "2458",
-        "Audio & Visual": "2452",
-        "Breweries & Distilleries": "2464",
-        "Business Services": "2238",
-        "Civil Engineering": "2404",
-        "Cleaning Company": "2405",
-        "Construction & Building": "2239",
-        "Consultancy": "2460",
-        "Corporate": "2406",
-        "E-commerce": "2418",
-        "Education Services": "2440",
-        "Electrical/Electricians": "2455",
-        "Engineering": "2240",
-        "Environmental/Energy": "2450",
-        "Events": "2461",
-        "Fabrications": "2407",
-        "Facilities Management": "2463",
-        "Financial Services": "2408",
-        "Fire & Security": "2462",
-        "Flooring Services": "2459",
-        "Food & Drink": "2437",
-        "Food Related": "2241",
-        "Funeral Services": "2410",
-        "Gardening & Landscaping": "2454",
-        "Glass Related": "2456",
-        "Health & Safety": "2448",
-        "Import & Distribution": "2242",
-        "IT Consultancy": "2443",
-        "IT Services & Support": "2444",
-        "IT Technology & Web": "2243",
-        "Leisure & Lifestyle": "2411",
-        "Machinery": "2447",
-        "Manufacturing": "2244",
-        "Medical & Education": "2412",
-        "Medical Service": "2441",
-        "Miscellaneous": "2413",
-        "Mobility Equipment": "2453",
-        "Plumbing & Heating": "2451",
-        "Print, Publishing, Media & Marketing": "2245",
-        "Professional & Financial Services": "2246",
-        "Professional & Legal Services": "2438",
-        "Recruitment": "2247",
-        "Refrigeration & Air Conditioning": "2414",
-        "Removals & Storage": "2439",
-        "School/Training Centre": "2465",
-        "Service": "2415",
-        "Service (Other)": "2416",
-        "Software": "2442",
-        "Telecommunications": "2445",
-        "Training": "2449",
-        "Transport, Haulage & Logistics": "2248",
-        "Vending Rounds": "2417",
-        "Waste Management & Recycling": "2249",
-        "Web Design & Development": "2446",
-        "Wholesale & Retail": "2250",
-        "Windows & Doors": "2457",
+        "Agriculture/Forestry/Fishing": "23",
+        "Care": "1",
+        "Catering": "4",
+        "Child Care": "2",
+        "Commercial": "3",
+        "Construction": "12",
+        "E-Commerce": "9",  # duplicate exists, first is fine
+        "Engineering": "13",
+        "Facilities & Waste Management": "15",
+        "Food & Drink": "21",
+        "Health & Beauty": "5",
+        "Healthcare": "24",
+        "Kennels": "11",
+        "Leisure & Lifestyle": "22",
+        "License & Leisure": "6",
+        "Manufacturing": "14",
+        "Miscellaneous": "26",
+        "Motor Related": "10",
+        "Property": "7",  # duplicate exists, first is fine
+        "Retail": "8",
+        "Retail/Wholesale/Distribution": "17",
+        "Services": "16",
+        "Technology": "19",
+        "Transport/Logistics/Storage": "18",
     }
     BASE_SLEEP = 1.2
     JITTER = 0.8
@@ -87,6 +54,17 @@ class KnightsbridgeClient:
     # LIFECYCLE
     # ------------------------------------------------------------------
 
+    def _pre_accept_cookies(self):
+        self.context.add_cookies([
+            {
+                "name": "CookieConsent",
+                "value": "{stamp:'accepted',necessary:true,preferences:true,statistics:true,marketing:true}",
+                "domain": "www.knightsbridgeplc.com",
+                "path": "/",
+            }
+        ])
+
+
     def start(self):
         print("🚀 Starting Knightsbridge client (headless =", self.HEADLESS, ")")
         self._playwright = sync_playwright().start()
@@ -94,7 +72,9 @@ class KnightsbridgeClient:
             headless=self.HEADLESS,
             slow_mo=100  # optional, highly recommended for observing Cookiebot
         )
-        self.page = self.browser.new_page()
+        self.context = self.browser.new_context()
+        self._pre_accept_cookies()
+        self.page = self.context.new_page()
 
     def stop(self):
         print("🛑 Stopping Knightsbridge client")
@@ -116,6 +96,20 @@ class KnightsbridgeClient:
 
         print("✅ Logged in successfully")
 
+    def _accept_cookies_if_present(self):
+        try:
+            # Cookiebot lives in an iframe
+            frame = self.page.frame_locator("iframe[src*='consent']")
+            btn = frame.locator(
+                "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll"
+            )
+            if btn.count() > 0:
+                btn.click()
+                self.page.wait_for_timeout(1500)
+                print("🍪 Accepted cookies (Cookiebot iframe)")
+        except Exception:
+            pass
+
     def _human_sleep(self, min_extra=0.0):
         time.sleep(self.BASE_SLEEP + min_extra + random.random() * self.JITTER)
 
@@ -127,52 +121,26 @@ class KnightsbridgeClient:
         if not self.page:
             raise RuntimeError("Client not started")
 
-        print("📄 Loading Knightsbridge commercial buying page")
-        self.page.goto(self.BASE_URL, timeout=30_000)
-        self.page.wait_for_load_state("domcontentloaded")
-        self._human_sleep(1.0)
-
-        # Guard: error page
-        body_text = self.page.locator("body").inner_text().lower()
-        if "sorry" in body_text and "cannot be displayed" in body_text:
-            raise RuntimeError("Knightsbridge error page detected — aborting")
-
         all_rows: dict[str, dict] = {}
 
         for sector_name, sector_value in self.SECTORS.items():
             print(f"\n🧭 Sector: {sector_name}")
 
-            # --------------------------------------------------
-            # Select sector
-            # --------------------------------------------------
-            from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-
-            sector = self.page.locator("#ContentPlaceHolder1_ctl09_sector")
-
-            try:
-                sector.wait_for(state="visible", timeout=10_000)
-                sector.wait_for(state="enabled", timeout=10_000)
-                sector.select_option(sector_value, timeout=5_000)
-            except PlaywrightTimeoutError:
-                raise RuntimeError(f"Sector dropdown not ready for {sector_name}")
-
-            self._human_sleep(0.5)
-
-            # --------------------------------------------------
-            # Search
-            # --------------------------------------------------
-            self.page.evaluate("Search('#ContentPlaceHolder1_ctl09', 1);")
-            self.page.wait_for_selector(
-                "div.business-listing.commercial",
-                timeout=30_000,
-            )
-            self._human_sleep(1.0)
-
             page_no = 1
 
             while True:
-                cards = self.page.locator("div.business-listing.commercial")
+                url = (
+                    f"{self.BASE_URL}"
+                    f"?sector={sector_value}"
+                    f"&PageNumber={page_no}"
+                )
+
+                self.page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                self._human_sleep(0.8)
+
+                cards = self.page.locator("div.wp-block-post.unb-business-listing")
                 card_count = cards.count()
+
                 if card_count == 0:
                     break
 
@@ -181,10 +149,8 @@ class KnightsbridgeClient:
                 for i in range(card_count):
                     card = cards.nth(i)
 
-                    title = card.locator("h3").inner_text().strip()
-                    ref_text = card.locator("p.ref").inner_text().strip()
-
-                    m = re.search(r"REF:\s*(\d+)", ref_text)
+                    ref_text = card.locator("p.reference").inner_text()
+                    m = re.search(r"Ref:\s*(\d+)", ref_text)
                     if not m:
                         continue
 
@@ -192,14 +158,20 @@ class KnightsbridgeClient:
                     if listing_id in all_rows:
                         continue
 
-                    href = card.locator("a.btn.details").get_attribute("href")
+                    title = (
+                        card.locator("h4.wp-block-post-title")
+                        .inner_text()
+                        .strip()
+                    )
+
+                    href = card.locator("a.wp-block-read-more").get_attribute("href")
                     if not href:
                         continue
 
                     all_rows[listing_id] = {
                         "source": "Knightsbridge",
                         "source_listing_id": listing_id,
-                        "source_url": f"https://www.knightsbridgeplc.com{href}",
+                        "source_url": href,
                         "title": title,
                         "sector_raw": sector_name,
                     }
@@ -211,18 +183,7 @@ class KnightsbridgeClient:
                     break
 
                 page_no += 1
-                self.page.evaluate(
-                    f"setCurrentIndex('#ContentPlaceHolder1_ctl13', {page_no});"
-                )
-                self._human_sleep(1.2)
-
-                try:
-                    self.page.wait_for_selector(
-                        "div.business-listing.commercial",
-                        timeout=15_000,
-                    )
-                except Exception:
-                    break
+                self._human_sleep(0.6)
 
         print(f"\n🏁 Knightsbridge index scrape complete — {len(all_rows)} deals")
         return list(all_rows.values())

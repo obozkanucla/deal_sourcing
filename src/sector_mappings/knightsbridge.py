@@ -329,6 +329,12 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "confidence": 0.95,
         "reason": "Direct healthcare service providers",
     },
+    "Care": {
+        "industry": "Healthcare",
+        "sector": None,
+        "confidence": 0.3,
+        "reason": "Broker taxonomy migration – top-level care bucket",
+    },
     "Mobility Equipment": {
         "industry": "Healthcare",
         "sector": "Medical Devices",
