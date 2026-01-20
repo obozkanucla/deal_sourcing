@@ -17,7 +17,6 @@ from src.integrations.google_drive import (
     find_or_create_deal_folder,
     upload_pdf_to_drive,
 )
-from src.sector_mappings.knightsbridge import KNIGHTSBRIDGE_SECTOR_MAP
 from src.persistence.deal_artifacts import record_deal_artifact
 from src.utils.hash_utils import compute_file_hash
 from src.brokers.knightsbridge_client import KnightsbridgeClient

@@ -26,22 +26,10 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "confidence": 0.2,
         "reason": "Broker top-level commercial aggregation bucket",
     },
-    "Services": {
-        "industry": "Other",
-        "sector": None,
-        "confidence": 0.2,
-        "reason": "Generic broker services aggregation bucket",
-    },
 
     # ------------------------------------------------------------------
     # CARE / HEALTH
     # ------------------------------------------------------------------
-    "Care": {
-        "industry": "Healthcare",
-        "sector": None,
-        "confidence": 0.3,
-        "reason": "Broker taxonomy migration – top-level care bucket",
-    },
     "Child Care": {
         "industry": "Healthcare",
         "sector": "Childcare Services",
@@ -94,22 +82,6 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
     },
 
     # ------------------------------------------------------------------
-    # INDUSTRIALS
-    # ------------------------------------------------------------------
-    "Manufacturing": {
-        "industry": "Industrials",
-        "sector": "Manufacturing",
-        "confidence": 0.95,
-        "reason": "Explicit manufacturing classification",
-    },
-    "Engineering": {
-        "industry": "Industrials",
-        "sector": "Engineering",
-        "confidence": 0.9,
-        "reason": "General engineering businesses",
-    },
-
-    # ------------------------------------------------------------------
     # FACILITIES / WASTE
     # ------------------------------------------------------------------
     "Facilities & Waste Management": {
@@ -122,12 +94,6 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
     # ------------------------------------------------------------------
     # CONSUMER / LEISURE
     # ------------------------------------------------------------------
-    "Leisure & Lifestyle": {
-        "industry": "Consumer_Retail",
-        "sector": "Leisure / Hospitality",
-        "confidence": 0.9,
-        "reason": "Consumer-facing leisure businesses",
-    },
     "License & Leisure": {
         "industry": "Consumer_Retail",
         "sector": "Licensed Leisure",
@@ -182,7 +148,12 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "confidence": 0.9,
         "reason": "Transport, logistics and storage services",
     },
-
+    "Transport, Logistics & Storage": {
+        "industry": "Logistics_Distribution",
+        "sector": "Logistics / Storage",
+        "confidence": 0.9,
+        "reason": "Transport, logistics and storage services",
+    },
     # ------------------------------------------------------------------
     # PROPERTY
     # ------------------------------------------------------------------
@@ -193,15 +164,6 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "reason": "Property-related operating businesses",
     },
 
-    # ------------------------------------------------------------------
-    # OTHER
-    # ------------------------------------------------------------------
-    "Miscellaneous": {
-        "industry": "Other",
-        "sector": "Miscellaneous",
-        "confidence": 0.6,
-        "reason": "Explicit broker miscellaneous category",
-    },
     # ------------------------------------------------------------------
     # BUSINESS SERVICES
     # ------------------------------------------------------------------
@@ -389,7 +351,18 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "confidence": 0.9,
         "reason": "Waste management and recycling services",
     },
-
+    "Waste Management & Recycling": {
+        "industry": "Industrials",
+        "sector": "Energy / Utilities",
+        "confidence": 0.9,
+        "reason": "Waste management and recycling services",
+    },
+    "Services": {
+        "industry": "Business_Services",
+        "sector": None,
+        "confidence": 0.3,
+        "reason": "KB generic services bucket (normalized to Business Services)",
+    },
     # ------------------------------------------------------------------
     # TECHNOLOGY
     # ------------------------------------------------------------------
@@ -489,12 +462,6 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
     # ------------------------------------------------------------------
     # FOOD & BEVERAGE
     # ------------------------------------------------------------------
-    "Food & Drink": {
-        "industry": "Food_Beverage",
-        "sector": "Food & Beverage",
-        "confidence": 0.9,
-        "reason": "Food and beverage businesses",
-    },
     "Food Related": {
         "industry": "Food_Beverage",
         "sector": "Food Production / Services",
@@ -616,6 +583,11 @@ def resolve_knightsbridge_sector(sector_raw: str | None):
     mapping = _CANONICAL_KB_MAP.get(key)
 
     if not mapping:
+        print(
+            "[KB SECTOR MISS]",
+            f"raw={repr(sector_raw)}",
+            f"canon={key}",
+        )
         raise RuntimeError(f"UNMAPPED_KNIGHTSBRIDGE_SECTOR: {sector_raw}")
 
     return (
