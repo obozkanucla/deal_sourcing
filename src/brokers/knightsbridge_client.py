@@ -6,7 +6,7 @@ from playwright.sync_api import sync_playwright
 from src.config import KB_USERNAME, KB_PASSWORD
 
 KNIGHTSBRIDGE_BASE = "https://www.knightsbridgeplc.com"
-
+LOGIN_BASE = "https://portal.knightsbridgeplc.com/login/"
 
 class KnightsbridgeClient:
     BASE_URL = "https://www.knightsbridgeplc.com/buy-a-business/search-our-listings/"
@@ -49,7 +49,7 @@ class KnightsbridgeClient:
         self.browser = None
         self.page = None
         self._playwright = None
-        self.HEADLESS = True # os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
+        self.HEADLESS = False # os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     # ------------------------------------------------------------------
     # LIFECYCLE
     # ------------------------------------------------------------------
@@ -85,13 +85,41 @@ class KnightsbridgeClient:
 
     def login(self):
         print("🔐 Logging into Knightsbridge")
-        self.page.goto(f"{KNIGHTSBRIDGE_BASE}/login/", wait_until="domcontentloaded")
-        self.page.fill("#LoginEmail", KB_USERNAME)
-        self.page.fill("#LoginPassword", KB_PASSWORD)
-        self.page.evaluate("LoginUser('#ContentPlaceHolder1_ctl09')")
-        self.page.wait_for_timeout(3000)
 
-        if self.page.locator("text=Logout").count() == 0:
+        self.page.goto(
+            LOGIN_BASE,
+            wait_until="networkidle",
+            timeout=30_000,
+        )
+
+        # --- HARD WAIT: inputs must exist and be visible ---
+        self.page.wait_for_selector(
+            "input#LoginEmail",
+            state="visible",
+            timeout=30_000,
+        )
+        self.page.wait_for_selector(
+            "input#LoginPassword",
+            state="visible",
+            timeout=30_000,
+        )
+
+        # Fill credentials
+        self.page.fill("input#LoginEmail", KB_USERNAME)
+        self.page.fill("input#LoginPassword", KB_PASSWORD)
+
+        # Submit via the actual onclick handler
+        self.page.evaluate("LoginUser('#ContentPlaceHolder1_ctl08')")
+
+        # Wait for post-login navigation
+        self.page.wait_for_load_state("networkidle")
+        self.page.wait_for_timeout(1500)
+
+        # Login success assertion (robust)
+        if (
+                "login" in self.page.url.lower()
+                or self.page.locator("text=Forgot password").count() > 0
+        ):
             raise RuntimeError("Knightsbridge login failed")
 
         print("✅ Logged in successfully")
