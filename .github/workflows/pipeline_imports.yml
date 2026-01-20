@@ -1,8 +1,8 @@
 name: Pipeline - Imports
 
 on:
-#  schedule:
-#    - cron: "* * * * *"   # daily at 6:00 UTC
+  schedule:
+    - cron: "0 2 */2 * *" # at 2AM every other day
   workflow_dispatch:
 
 permissions:

@@ -1,8 +1,8 @@
 name: Pipeline - Post Processing
 
 on:
-#  schedule:
-#    - cron: "* * * * *"   # daily at 6:00 UTC
+  schedule:
+    - cron: "0 6 */2 * *" # at 6AM every other day
   workflow_dispatch:
 
 permissions:

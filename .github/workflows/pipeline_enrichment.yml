@@ -1,8 +1,8 @@
 name: Pipeline - Enrichment
 
 on:
-#  schedule:
-#    - cron: "* * * * *"   # daily at 6:00 UTC
+  schedule:
+    - cron: "0 4 */2 * *" # at 4AM every other day
   workflow_dispatch:
 
 permissions:
