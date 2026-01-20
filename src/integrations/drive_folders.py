@@ -28,6 +28,7 @@ CANONICAL_INDUSTRY_FOLDERS = {
     "Technology":                       "1KdA-m9R6gjICTxRO0Sxd_3VAMu4aGZMy",
     "Healthcare":                       "1BwuX7y1sQFprgoYkctA09nUsfiUUPrbj",
     "Other":                            "1RKZ-FY6PQIxVVd2Rv4x1zSEIM59S-z9k",
+    "Agriculture":                      "1iudhlz8bskA4xvs7nn4gWYx7sS113nwZ"
 }
 
 # ============================================================

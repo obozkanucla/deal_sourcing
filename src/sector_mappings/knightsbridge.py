@@ -61,7 +61,7 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
         "reason": "Consumer-facing health and beauty businesses",
     },
     "Kennels": {
-        "industry": "Consumer_Services",
+        "industry": "Consumer_Retail",
         "sector": "Pet Services",
         "confidence": 0.85,
         "reason": "Pet boarding and kennel services",
@@ -187,7 +187,7 @@ KNIGHTSBRIDGE_SECTOR_MAP = {
     # PROPERTY
     # ------------------------------------------------------------------
     "Property": {
-        "industry": "Real_Estate",
+        "industry": "Construction_Built_Environment",
         "sector": "Property Services",
         "confidence": 0.85,
         "reason": "Property-related operating businesses",

@@ -110,7 +110,10 @@ INDUSTRY_SECTORS: dict[str, list[str]] = {
         "Software / SaaS",
         "Telecommunications",
     ],
-
+    "Agriculture": [
+        "Agriculture / Primary Production",
+        "Agriculture/Forestry/Fishing"
+    ],
     "Other": [
         "Agriculture / Farming",
         "Government / Public Sector",
