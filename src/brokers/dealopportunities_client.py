@@ -13,7 +13,7 @@ class DealOpportunitiesClient:
     BASE_URL = "https://www.dealopportunities.co.uk/search/advanced"
 
     # HEADLESS = False
-    HEADLESS = os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
+    HEADLESS = 0 #os.getenv("PLAYWRIGHT_HEADLESS", "0") == "1"
     MAX_PAGES_PER_RUN = 50
     BASE_SLEEP = 8
     JITTER = 6

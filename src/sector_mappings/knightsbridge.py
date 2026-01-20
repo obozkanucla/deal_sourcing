@@ -7,7 +7,201 @@ def canonicalize_sector_key(s: str) -> str:
     )
 
 KNIGHTSBRIDGE_SECTOR_MAP = {
+    # ------------------------------------------------------------------
+    # AGRICULTURE
+    # ------------------------------------------------------------------
+    "Agriculture/Forestry/Fishing": {
+        "industry": "Agriculture",
+        "sector": "Agriculture / Primary Production",
+        "confidence": 0.9,
+        "reason": "Primary agriculture, forestry and fishing activities",
+    },
 
+    # ------------------------------------------------------------------
+    # BUSINESS / SERVICES (AGGREGATES)
+    # ------------------------------------------------------------------
+    "Commercial": {
+        "industry": "Business_Services",
+        "sector": None,
+        "confidence": 0.2,
+        "reason": "Broker top-level commercial aggregation bucket",
+    },
+    "Services": {
+        "industry": "Other",
+        "sector": None,
+        "confidence": 0.2,
+        "reason": "Generic broker services aggregation bucket",
+    },
+
+    # ------------------------------------------------------------------
+    # CARE / HEALTH
+    # ------------------------------------------------------------------
+    "Care": {
+        "industry": "Healthcare",
+        "sector": None,
+        "confidence": 0.3,
+        "reason": "Broker taxonomy migration – top-level care bucket",
+    },
+    "Child Care": {
+        "industry": "Healthcare",
+        "sector": "Childcare Services",
+        "confidence": 0.85,
+        "reason": "Early years and childcare providers",
+    },
+    "Healthcare": {
+        "industry": "Healthcare",
+        "sector": None,
+        "confidence": 0.4,
+        "reason": "Broker healthcare aggregation bucket",
+    },
+    "Health & Beauty": {
+        "industry": "Consumer_Retail",
+        "sector": "Health & Beauty Services",
+        "confidence": 0.8,
+        "reason": "Consumer-facing health and beauty businesses",
+    },
+    "Kennels": {
+        "industry": "Consumer_Services",
+        "sector": "Pet Services",
+        "confidence": 0.85,
+        "reason": "Pet boarding and kennel services",
+    },
+
+    # ------------------------------------------------------------------
+    # FOOD & BEVERAGE
+    # ------------------------------------------------------------------
+    "Food & Drink": {
+        "industry": "Food_Beverage",
+        "sector": "Food & Beverage",
+        "confidence": 0.9,
+        "reason": "Food and beverage businesses",
+    },
+    "Catering": {
+        "industry": "Food_Beverage",
+        "sector": "Catering Services",
+        "confidence": 0.8,
+        "reason": "Catering and contract food services",
+    },
+
+    # ------------------------------------------------------------------
+    # CONSTRUCTION / BUILT ENVIRONMENT
+    # ------------------------------------------------------------------
+    "Construction": {
+        "industry": "Construction_Built_Environment",
+        "sector": "Construction Contractors",
+        "confidence": 0.85,
+        "reason": "Top-level construction category introduced by broker",
+    },
+
+    # ------------------------------------------------------------------
+    # INDUSTRIALS
+    # ------------------------------------------------------------------
+    "Manufacturing": {
+        "industry": "Industrials",
+        "sector": "Manufacturing",
+        "confidence": 0.95,
+        "reason": "Explicit manufacturing classification",
+    },
+    "Engineering": {
+        "industry": "Industrials",
+        "sector": "Engineering",
+        "confidence": 0.9,
+        "reason": "General engineering businesses",
+    },
+
+    # ------------------------------------------------------------------
+    # FACILITIES / WASTE
+    # ------------------------------------------------------------------
+    "Facilities & Waste Management": {
+        "industry": "Business_Services",
+        "sector": "Facilities Management",
+        "confidence": 0.9,
+        "reason": "Facilities and waste management services",
+    },
+
+    # ------------------------------------------------------------------
+    # CONSUMER / LEISURE
+    # ------------------------------------------------------------------
+    "Leisure & Lifestyle": {
+        "industry": "Consumer_Retail",
+        "sector": "Leisure / Hospitality",
+        "confidence": 0.9,
+        "reason": "Consumer-facing leisure businesses",
+    },
+    "License & Leisure": {
+        "industry": "Consumer_Retail",
+        "sector": "Licensed Leisure",
+        "confidence": 0.85,
+        "reason": "Licensed leisure and hospitality venues",
+    },
+    "Motor Related": {
+        "industry": "Consumer_Retail",
+        "sector": "Automotive Services",
+        "confidence": 0.85,
+        "reason": "Automotive sales, repair and related services",
+    },
+
+    # ------------------------------------------------------------------
+    # RETAIL / DISTRIBUTION
+    # ------------------------------------------------------------------
+    "Retail": {
+        "industry": "Consumer_Retail",
+        "sector": "Retail Stores",
+        "confidence": 0.9,
+        "reason": "Retail-focused businesses",
+    },
+    "Retail/Wholesale/Distribution": {
+        "industry": "Consumer_Retail",
+        "sector": "Wholesale / Distribution",
+        "confidence": 0.85,
+        "reason": "Combined retail and distribution activities",
+    },
+    "E-Commerce": {
+        "industry": "Consumer_Retail",
+        "sector": "E-commerce",
+        "confidence": 0.95,
+        "reason": "Online retail and e-commerce businesses",
+    },
+
+    # ------------------------------------------------------------------
+    # TECHNOLOGY
+    # ------------------------------------------------------------------
+    "Technology": {
+        "industry": "Technology",
+        "sector": None,
+        "confidence": 0.4,
+        "reason": "Top-level technology aggregation bucket",
+    },
+
+    # ------------------------------------------------------------------
+    # TRANSPORT / LOGISTICS
+    # ------------------------------------------------------------------
+    "Transport/Logistics/Storage": {
+        "industry": "Logistics_Distribution",
+        "sector": "Logistics / Storage",
+        "confidence": 0.9,
+        "reason": "Transport, logistics and storage services",
+    },
+
+    # ------------------------------------------------------------------
+    # PROPERTY
+    # ------------------------------------------------------------------
+    "Property": {
+        "industry": "Real_Estate",
+        "sector": "Property Services",
+        "confidence": 0.85,
+        "reason": "Property-related operating businesses",
+    },
+
+    # ------------------------------------------------------------------
+    # OTHER
+    # ------------------------------------------------------------------
+    "Miscellaneous": {
+        "industry": "Other",
+        "sector": "Miscellaneous",
+        "confidence": 0.6,
+        "reason": "Explicit broker miscellaneous category",
+    },
     # ------------------------------------------------------------------
     # BUSINESS SERVICES
     # ------------------------------------------------------------------
