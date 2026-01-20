@@ -21,7 +21,7 @@ from src.persistence.deal_artifacts import record_deal_artifact
 from src.utils.hash_utils import compute_file_hash
 from src.brokers.knightsbridge_client import KnightsbridgeClient
 from src.persistence.repository import SQLiteRepository
-
+from src.domain.industries import CANONICAL_INDUSTRIES
 # ---------------------------------------------------------------------
 # CONFIG
 # ---------------------------------------------------------------------
@@ -40,7 +40,7 @@ JITTER = 0.8
 if not KB_USERNAME or not KB_PASSWORD:
     raise RuntimeError("KB_USERNAME / KB_PASSWORD not set")
 
-DRY_RUN = False
+DRY_RUN = True
 
 # ---------------------------------------------------------------------
 # HELPERS
@@ -297,12 +297,11 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                 if not industry or not sector:
                     raise RuntimeError("MISSING_SECTOR_CANONICAL")
 
+                if industry not in CANONICAL_INDUSTRIES:
+                    raise RuntimeError(f"ILLEGAL_INDUSTRY_STATE: {industry}")
+
                 # Knightsbridge sector is broker-declared at index time.
                 # Enrichment must never infer or override it.
-                assert industry and sector
-
-                if not industry or not sector:
-                    raise RuntimeError("MISSING_SECTOR_CANONICAL")
 
                 parent_folder_id = get_drive_parent_folder_id(
                     industry=industry,
