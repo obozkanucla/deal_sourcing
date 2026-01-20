@@ -12,7 +12,7 @@ from src.utils.run_scripts import run_script
 SCRIPTS = [
     # "import_axispartnership.py",
     # "import_businessbuyers.py",
-    # "import_businesses4sale.py",
+    # "import_businesses4sale_vault.py",
     # "import_dealopportunities.py",
     # "import_knightsbridge.py",
     # "import_hiltonsmythe.py",
@@ -20,7 +20,7 @@ SCRIPTS = [
 
     "enrich_axispartnership.py",
     "enrich_businessbuyers.py",
-    "enrich_businesses4sale.py",
+    "enrich_businesses4sale_vault.py",
     "enrich_dealopportunities.py",
     "enrich_knightsbridge.py",
     "enrich_hiltonsmythe.py",

@@ -80,7 +80,7 @@ def find_existing_mv_owner(conn, mv_id: str, current_row_id: int) -> Optional[in
         """
         SELECT id
         FROM deals
-        WHERE source = 'BusinessesForSale'
+        WHERE source IN ("BusinessesForSale", "BusinessesForSale_Generic")
           AND source_listing_id = ?
           AND id != ?
         """,
@@ -404,7 +404,7 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                             drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
                             drive_url=pdf_drive_url,
                             extraction_version=B4S_EXTRACTION_VERSION,
-                            created_by="enrich_businesses4sale.py",
+                            created_by="enrich_businesses4sale_vault.py",
                         )
 
                     pdf_path.unlink(missing_ok=True)

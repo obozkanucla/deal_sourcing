@@ -1,7 +1,7 @@
-# src/scripts/import_businesses4sale.py
+# src/scripts/import_businesses4sale_vault.py
 
 from pathlib import Path
-from src.brokers.businesses4sale_client import BusinessesForSaleClient
+from src.brokers.businesses4sale_vault_client import BusinessesForSaleClient
 from src.persistence.repository import SQLiteRepository
 
 DRY_RUN = False  # 🔒 keep True until confident
@@ -9,7 +9,7 @@ DRY_RUN = False  # 🔒 keep True until confident
 
 def main():
     repo = SQLiteRepository(Path("db/deals.sqlite"))
-    print("🚀 import_businesses4sale.py started")
+    print("🚀 import_businesses4sale_vault.py started")
 
     client = BusinessesForSaleClient(
         headless=False,

@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = [
     "import_axispartnership.py",
     "import_businessbuyers.py",
-    "import_businesses4sale.py",
+    "import_businesses4sale_vault.py",
     "import_dealopportunities.py",
     "import_knightsbridge.py",
     "import_hiltonsmythe.py",

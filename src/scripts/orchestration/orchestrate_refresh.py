@@ -6,7 +6,7 @@ BROKERS = [
     {
         "name": "BusinessesForSale",
         "index": "src/scripts/index_businesses4sale.py",
-        "enrich": "src/scripts/enrich_businesses4sale.py",
+        "enrich": "src/scripts/enrich_businesses4sale_vault.py",
     },
     {
         "name": "BusinessBuyers",
