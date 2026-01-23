@@ -190,61 +190,37 @@ def upload_pdf_to_drive(
 
     return f"https://drive.google.com/file/d/{file['id']}/view"
 
-def discover_existing_drive_pdfs(conn, deal, folder_id):
+def discover_existing_drive_pdfs(folder_id: str) -> list[dict]:
     """
-    Reconcile existing Drive PDFs into deal_artifacts + deals table.
+    Pure Drive discovery.
+    Returns metadata for PDFs in the folder.
+    No DB. No deal semantics.
     """
-    files = list_files_in_folder(folder_id)
+    service = get_drive_service()
 
-    for f in files:
-        name = f["name"].lower()
-        drive_url = f["webViewLink"]
-        file_id = f["id"]
+    res = service.files().list(
+        q=(
+            "mimeType='application/pdf' "
+            f"and '{folder_id}' in parents "
+            "and trashed=false"
+        ),
+        fields="files(id,name,webViewLink,mimeType)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora="allDrives",
+    ).execute()
 
-        if name.endswith("-listing.pdf"):
-            artifact_type = "listing_pdf"
-        elif name.endswith(".pdf"):
-            artifact_type = "information_memorandum"
-        else:
-            continue
+    return res.get("files", [])
 
-        existing = conn.execute(
-            """
-            SELECT 1 FROM deal_artifacts
-            WHERE deal_id = ?
-              AND artifact_type = ?
-              AND drive_file_id = ?
-            """,
-            (deal["id"], artifact_type, file_id),
-        ).fetchone()
+def list_files_in_folder(folder_id: str) -> list[dict]:
+    service = get_drive_service()
 
-        if existing:
-            continue
+    res = service.files().list(
+        q=f"'{folder_id}' in parents and trashed=false",
+        fields="files(id,name,webViewLink,mimeType)",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora="allDrives",
+    ).execute()
 
-        record_deal_artifact(
-            conn=conn,
-            source=SOURCE,
-            source_listing_id=deal["source_listing_id"],
-            deal_id=deal["id"],
-            artifact_type=artifact_type,
-            artifact_name=f["name"],
-            artifact_hash=None,  # unknown, Drive-originated
-            drive_file_id=file_id,
-            drive_url=drive_url,
-            extraction_version="drive-reconcile",
-            created_by="enrich_abercorn.py",
-        )
-
-        if artifact_type == "information_memorandum":
-            conn.execute(
-                """
-                UPDATE deals
-                SET pdf_drive_url = ?,
-                    last_updated = CURRENT_TIMESTAMP,
-                    last_updated_source = 'AUTO'
-                WHERE id = ?
-                """,
-                (drive_url, deal["id"]),
-            )
-
-    conn.commit()
+    return res.get("files", [])
