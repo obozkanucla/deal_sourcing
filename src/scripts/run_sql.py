@@ -9,27 +9,36 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""SELECT
-                      id,
-                      source_listing_id,
-                      status,
-                      detail_fetch_reason,
-                      detail_fetched_at
-                    FROM deals
-                    WHERE source = 'BusinessesForSale'
-                      AND status = 'Lost'
-                      AND detail_fetch_reason = 'listing_unavailable';""")
     conn.execute("""UPDATE deals
-                    SET
-                      status               = NULL,
-                      detail_fetch_reason  = 'reverted_false_lost',
-                      needs_detail_refresh = 1,
-                      last_updated         = CURRENT_TIMESTAMP,
-                      last_updated_source  = 'MANUAL_FIX'
-                    WHERE source = 'BusinessesForSale'
-                      AND status = 'Lost'
-                      AND detail_fetch_reason = 'listing_unavailable';
+                    SET industry = 'Consumer_Retail'
+                    WHERE source = 'Knightsbridge'
+                      AND industry = 'Consumer_Services';
     """)
+    conn.execute("""UPDATE deals
+                    SET industry = 'Construction_Built_Environment'
+                    WHERE source = 'Knightsbridge'
+                      AND industry = 'Real_Estate';""")
+    # conn.execute("""SELECT
+    #                   id,
+    #                   source_listing_id,
+    #                   status,
+    #                   detail_fetch_reason,
+    #                   detail_fetched_at
+    #                 FROM deals
+    #                 WHERE source = 'BusinessesForSale'
+    #                   AND status = 'Lost'
+    #                   AND detail_fetch_reason = 'listing_unavailable';""")
+    # conn.execute("""UPDATE deals
+    #                 SET
+    #                   status               = NULL,
+    #                   detail_fetch_reason  = 'reverted_false_lost',
+    #                   needs_detail_refresh = 1,
+    #                   last_updated         = CURRENT_TIMESTAMP,
+    #                   last_updated_source  = 'MANUAL_FIX'
+    #                 WHERE source = 'BusinessesForSale'
+    #                   AND status = 'Lost'
+    #                   AND detail_fetch_reason = 'listing_unavailable';
+    # """)
     # conn.execute("""DELETE FROM deals
     #                 WHERE source = 'transworld_uk'
     #                   AND source_url IN (
