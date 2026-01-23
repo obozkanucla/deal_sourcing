@@ -1,0 +1,168 @@
+name: Abercorn Enrichment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # required for GitHub Releases
+  actions: read
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      PLAYWRIGHT_HEADLESS: "1"
+
+      # -----------------------------
+      # Broker credentials
+      # -----------------------------
+      BB_USERNAME: ${{ secrets.BB_USERNAME }}
+      BB_PASSWORD: ${{ secrets.BB_PASSWORD }}
+
+      # -----------------------------
+      # Slack
+      # -----------------------------
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+
+      # -----------------------------
+      # Google APIs (OAuth user)
+      # -----------------------------
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+
+      # -----------------------------
+      # Pipeline safety
+      # -----------------------------
+      PIPELINE_ENV: prod
+
+    steps:
+      # --------------------------------------------------
+      # Checkout code
+      # --------------------------------------------------
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # --------------------------------------------------
+      # Python
+      # --------------------------------------------------
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Debug pipeline env
+        run: |
+          echo "PIPELINE_ENV=$PIPELINE_ENV"
+
+      # --------------------------------------------------
+      # Playwright
+      # --------------------------------------------------
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install chromium --with-deps
+
+      # --------------------------------------------------
+      # Restore canonical SQLite DB from GitHub Release
+      # --------------------------------------------------
+      - name: Download latest SQLite DB from release (if exists)
+        run: |
+          mkdir -p db
+          gh release download db-latest \
+            --pattern deals.sqlite \
+            --output db/deals.sqlite \
+            --clobber || echo "No existing DB found — starting fresh"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # --------------------------------------------------
+      # Phase 0.0 — Reset Legacy Deals & Reimport
+      # --------------------------------------------------
+#      - name: Reset Dmitry deals
+#        run: python -m src.scripts.reset_dmitry_deals
+
+      # --------------------------------------------------
+      # Phase 0 — Legacy imports
+      # --------------------------------------------------
+#      - name: Import legacy deals
+#        run: python -m src.scripts.import_legacy_deals
+#
+#      - name: Import Dmitry deals
+#        run: python -m src.scripts.import_dmitry_deals
+#
+#      # --------------------------------------------------
+#      # Phase 1 — Broker imports
+#      # --------------------------------------------------
+#      - name: Import Axis Partnership
+#        run: python -m src.scripts.import_axispartnership
+#
+#      - name: Import BusinessBuyers
+#        run: python -m src.scripts.import_businessbuyers
+#
+#      - name: Import BusinessesForSale
+#        run: python -m src.scripts.import_businesses4sale
+#
+#      - name: Import DealOpportunities
+#        run: python -m src.scripts.import_dealopportunities
+#
+#      - name: Import Knightsbridge
+#        run: python -m src.scripts.import_knightsbridge
+
+      - name: Import Abercorn deals
+        run: python -m src.scripts.import_abercorn
+#      # --------------------------------------------------
+#      # Phase 2 — Enrichment
+#      # --------------------------------------------------
+#      - name: Enrich Axis Partnership
+#        run: python -m src.scripts.enrich_axispartnership
+#
+#      - name: Enrich BusinessBuyers
+#        run: python -m src.scripts.enrich_businessbuyers
+#
+#      - name: Enrich BusinessesForSale
+#        run: python -m src.scripts.enrich_businesses4sale
+#
+#      - name: Enrich DealOpportunities
+#        run: python -m src.scripts.enrich_dealopportunities
+#
+#      - name: Enrich Knightsbridge
+#        run: python -m src.scripts.enrich_knightsbridge
+
+      - name: Enrich Abercorn deals
+        run: python -m src.scripts.import_abercorn
+#
+#      # --------------------------------------------------
+#      # Phase 3 — Intelligence
+#      # --------------------------------------------------
+#      - name: Infer sectors + move Drive folders
+#        run: python -m src.scripts.infer_sectors
+#
+#      - name: Enrich financials from descriptions
+#        run: python -m src.scripts.enrich_financials_from_description
+#
+#      - name: Recalculate financial metrics
+#        run: python -m src.scripts.recalculate_financial_metrics
+
+      # --------------------------------------------------
+      # Phase 4 — Sync outputs
+      # --------------------------------------------------
+      - name: Sync SQLite → Google Sheets
+        run: python -m src.scripts.sync_to_sheets
+
+      # --------------------------------------------------
+      # Persist canonical SQLite snapshot
+      # --------------------------------------------------
+      - name: Publish SQLite snapshot to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: db-latest
+          name: Deal Pipeline SQLite (Latest)
+          files: db/deals.sqlite
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
