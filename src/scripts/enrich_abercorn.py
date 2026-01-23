@@ -1,5 +1,3 @@
-# src/scripts/enrich_abercorn.py
-
 from pathlib import Path
 import time
 import random
@@ -13,6 +11,7 @@ from src.integrations.drive_folders import get_drive_parent_folder_id
 from src.integrations.google_drive import (
     find_or_create_deal_folder,
     upload_pdf_to_drive,
+    list_files_in_folder,
 )
 from src.utils.hash_utils import compute_file_hash
 
@@ -28,9 +27,73 @@ PDF_ROOT = Path("/tmp/abercorn_pdfs")
 PDF_ROOT.mkdir(parents=True, exist_ok=True)
 
 SLEEP_BETWEEN = (1.5, 3.0)
-DRY_RUN = False   # ← flip to False when confident
+DRY_RUN = False
 
 repo = SQLiteRepository(Path("db/deals.sqlite"))
+
+# -------------------------------------------------
+# DRIVE RECONCILIATION
+# -------------------------------------------------
+
+def discover_existing_drive_pdfs(conn, deal, folder_id):
+    """
+    Reconcile existing Drive PDFs into deal_artifacts + deals table.
+    """
+    files = list_files_in_folder(folder_id)
+
+    for f in files:
+        name = f["name"].lower()
+        drive_url = f["webViewLink"]
+        file_id = f["id"]
+
+        if name.endswith("-listing.pdf"):
+            artifact_type = "listing_pdf"
+        elif name.endswith(".pdf"):
+            artifact_type = "information_memorandum"
+        else:
+            continue
+
+        existing = conn.execute(
+            """
+            SELECT 1
+            FROM deal_artifacts
+            WHERE deal_id = ?
+              AND artifact_type = ?
+              AND drive_file_id = ?
+            """,
+            (deal["id"], artifact_type, file_id),
+        ).fetchone()
+
+        if existing:
+            continue
+
+        record_deal_artifact(
+            conn=conn,
+            source=SOURCE,
+            source_listing_id=deal["source_listing_id"],
+            deal_id=deal["id"],
+            artifact_type=artifact_type,
+            artifact_name=f["name"],
+            artifact_hash=None,  # Drive-originated
+            drive_file_id=file_id,
+            drive_url=drive_url,
+            extraction_version="drive-reconcile",
+            created_by="enrich_abercorn.py",
+        )
+
+        if artifact_type == "information_memorandum":
+            conn.execute(
+                """
+                UPDATE deals
+                SET pdf_drive_url = ?,
+                    last_updated = CURRENT_TIMESTAMP,
+                    last_updated_source = 'AUTO'
+                WHERE id = ?
+                """,
+                (drive_url, deal["id"]),
+            )
+
+    conn.commit()
 
 # -------------------------------------------------
 # ENRICHMENT
@@ -78,7 +141,6 @@ def enrich_abercorn(limit: Optional[int] = None) -> None:
                             (deal["id"],),
                         )
                         conn.commit()
-
                     continue
 
                 context = browser.new_context(
@@ -95,7 +157,7 @@ def enrich_abercorn(limit: Optional[int] = None) -> None:
                     page.goto(url, timeout=60_000, wait_until="domcontentloaded")
 
                     # -------------------------------------------------
-                    # DRIVE FOLDER
+                    # DRIVE FOLDER (ALWAYS)
                     # -------------------------------------------------
                     if DRY_RUN:
                         deal_folder_id = "DRY_RUN"
@@ -109,6 +171,21 @@ def enrich_abercorn(limit: Optional[int] = None) -> None:
                             deal_id=ref,
                             deal_title=title,
                         )
+
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET drive_folder_id     = ?,
+                                drive_folder_url    = 'https://drive.google.com/drive/folders/' || ?,
+                                last_updated        = CURRENT_TIMESTAMP,
+                                last_updated_source = 'AUTO'
+                            WHERE id = ?
+                            """,
+                            (deal_folder_id, deal_folder_id, deal["id"]),
+                        )
+                        conn.commit()
+
+                        discover_existing_drive_pdfs(conn, deal, deal_folder_id)
 
                     # -------------------------------------------------
                     # LISTING PAGE PDF
@@ -138,7 +215,7 @@ def enrich_abercorn(limit: Optional[int] = None) -> None:
                         ).fetchone()
 
                         if existing:
-                            print("↩️ Listing PDF already exists — skipping")
+                            print("↩️ Listing PDF already recorded")
                         elif DRY_RUN:
                             print("DRY_RUN → listing PDF captured")
                         else:
@@ -178,7 +255,6 @@ def enrich_abercorn(limit: Optional[int] = None) -> None:
                     im_pdf_path.write_bytes(response.body())
 
                     if im_pdf_path.stat().st_size < 10_000:
-                        print("⚠️ IM too small — skipping")
                         im_pdf_path.unlink(missing_ok=True)
                         continue
 
@@ -196,7 +272,19 @@ def enrich_abercorn(limit: Optional[int] = None) -> None:
                     ).fetchone()
 
                     if existing:
-                        print("↩️ IM already exists — skipping")
+                        print("↩️ IM already recorded — marking complete")
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET needs_detail_refresh = 0,
+                                detail_fetched_at = CURRENT_TIMESTAMP,
+                                last_updated = CURRENT_TIMESTAMP,
+                                last_updated_source = 'AUTO'
+                            WHERE id = ?
+                            """,
+                            (deal["id"],),
+                        )
+                        conn.commit()
                         im_pdf_path.unlink(missing_ok=True)
                         continue
 
@@ -229,20 +317,13 @@ def enrich_abercorn(limit: Optional[int] = None) -> None:
                         """
                         UPDATE deals
                         SET pdf_drive_url = ?,
-                            drive_folder_id = ?,
-                            drive_folder_url = 'https://drive.google.com/drive/folders/' || ?,
                             needs_detail_refresh = 0,
                             detail_fetched_at = CURRENT_TIMESTAMP,
                             last_updated = CURRENT_TIMESTAMP,
                             last_updated_source = 'AUTO'
                         WHERE id = ?
                         """,
-                        (
-                            im_drive_url,
-                            deal_folder_id,
-                            deal_folder_id,
-                            deal["id"],
-                        ),
+                        (im_drive_url, deal["id"]),
                     )
                     conn.commit()
 

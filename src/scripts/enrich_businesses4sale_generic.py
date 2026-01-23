@@ -301,6 +301,18 @@ def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
                     filename=f"{listing_id}.pdf",
                     folder_id=deal_folder_id,
                 )
+                conn.execute(
+                    """
+                    UPDATE deals
+                    SET drive_folder_id     = ?,
+                        drive_folder_url    = 'https://drive.google.com/drive/folders/' || ?,
+                        last_updated        = CURRENT_TIMESTAMP,
+                        last_updated_source = 'AUTO'
+                    WHERE id = ?
+                    """,
+                    (deal_folder_id, deal_folder_id, deal["id"]),
+                )
+                conn.commit()
 
                 record_deal_artifact(
                     conn=conn,
