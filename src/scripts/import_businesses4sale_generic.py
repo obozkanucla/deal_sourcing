@@ -118,6 +118,11 @@ def import_businesses4sale_search() -> None:
                         print("duplicate found")
                         continue
 
+                    if "/franchises/" in url:
+                        skipped += 1
+                        print("franchise found")
+                        continue
+
                     seen_urls.add(url)
                     listings[url] = rec
                     added += 1
