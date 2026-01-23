@@ -10,14 +10,21 @@ def column_exists(conn, table, column):
 
 with repo.get_conn() as conn:
     conn.execute("""UPDATE deals
-                    SET industry = 'Consumer_Retail'
-                    WHERE source = 'Knightsbridge'
-                      AND industry = 'Consumer_Services';
-    """)
-    conn.execute("""UPDATE deals
-                    SET industry = 'Construction_Built_Environment'
-                    WHERE source = 'Knightsbridge'
-                      AND industry = 'Real_Estate';""")
+                    SET
+                      status = NULL,
+                      last_updated = CURRENT_TIMESTAMP,
+                      last_updated_source = 'FIX_ABERCORN_STATUS'
+                    WHERE source = 'Abercorn'
+                      AND status = 'Active';""")
+    # conn.execute("""UPDATE deals
+    #                 SET industry = 'Consumer_Retail'
+    #                 WHERE source = 'Knightsbridge'
+    #                   AND industry = 'Consumer_Services';
+    # """)
+    # conn.execute("""UPDATE deals
+    #                 SET industry = 'Construction_Built_Environment'
+    #                 WHERE source = 'Knightsbridge'
+    #                   AND industry = 'Real_Estate';""")
     # conn.execute("""SELECT
     #                   id,
     #                   source_listing_id,

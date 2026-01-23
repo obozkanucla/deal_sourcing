@@ -94,12 +94,11 @@ def import_abercorn():
                     sector_source,
                     sector_inference_confidence,
                     sector_inference_reason,
-                    status,
                     needs_detail_refresh,
                     last_updated,
                     last_updated_source
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', 1, ?, 'AUTO')
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'AUTO')
                 """,
                 (
                     SOURCE,
