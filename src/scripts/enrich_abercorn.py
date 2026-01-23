@@ -229,4 +229,4 @@ def enrich_abercorn(limit: Optional[int] = None) -> None:
 
 
 if __name__ == "__main__":
-    enrich_abercorn(limit=10)
+    enrich_abercorn()
