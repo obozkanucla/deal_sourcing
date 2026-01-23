@@ -102,15 +102,17 @@ jobs:
           print(cur.execute("SELECT COUNT(*) FROM deals").fetchone())
           
           print(cur.execute("""SELECT
-                      id,
-                      source_listing_id,
-                      status,
-                      detail_fetch_reason,
-                      detail_fetched_at
-                    FROM deals
-                    WHERE source = 'BusinessesForSale'
-                      AND status = 'Lost'
-                      AND detail_fetch_reason = 'listing_unavailable'"""))
+                                COUNT(*) AS total,
+                                SUM(needs_detail_refresh = 0) AS not_refreshable,
+                                SUM(drive_folder_id IS NULL) AS missing_folder,
+                                SUM(NOT EXISTS (
+                                      SELECT 1
+                                      FROM deal_artifacts a
+                                      WHERE a.deal_id = deals.id
+                                    )) AS missing_artifacts
+                              FROM deals
+                              WHERE source = 'Abercorn'
+                                AND (status IS NULL OR status != 'Lost');"""))
           conn.close()
           EOF
 
