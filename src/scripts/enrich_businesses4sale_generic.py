@@ -162,7 +162,7 @@ def extract_listing_id(soup: BeautifulSoup, fallback_slug: str) -> str:
 
 def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
     START = time.time()
-    MAX_RUNTIME = 60 * 60
+    MAX_RUNTIME = 40 * 60
 
     print(f"📀 SQLite DB path: {DB_PATH}")
 
