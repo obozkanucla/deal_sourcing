@@ -1,4 +1,4 @@
-name: B4S Generic Enrichment
+name: B4S Generic Import
 
 on:
   workflow_dispatch:
