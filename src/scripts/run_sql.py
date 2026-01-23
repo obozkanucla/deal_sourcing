@@ -9,13 +9,41 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""UPDATE deals
-                    SET
-                      status = NULL,
-                      last_updated = CURRENT_TIMESTAMP,
-                      last_updated_source = 'FIX_ABERCORN_STATUS'
+    conn.execute("""SELECT
+                      COUNT(*) AS total,
+                      SUM(needs_detail_refresh = 0) AS not_refreshable,
+                      SUM(drive_folder_id IS NULL) AS missing_folder,
+                      SUM(NOT EXISTS (
+                            SELECT 1
+                            FROM deal_artifacts a
+                            WHERE a.deal_id = deals.id
+                          )) AS missing_artifacts
+                    FROM deals
                     WHERE source = 'Abercorn'
-                      AND status = 'Active';""")
+                      AND (status IS NULL OR status != 'Lost');""")
+    # conn.execute("""UPDATE deals
+    #                 SET
+    #                   needs_detail_refresh = 1,
+    #                   last_updated = CURRENT_TIMESTAMP,
+    #                   last_updated_source = 'FIX_ABERCORN_REENRICH'
+    #                 WHERE source = 'Abercorn'
+    #                   AND (status IS NULL OR status != 'Lost')
+    #                   AND (
+    #                        drive_folder_id IS NULL
+    #                     OR pdf_drive_url IS NULL
+    #                     OR NOT EXISTS (
+    #                         SELECT 1
+    #                         FROM deal_artifacts a
+    #                         WHERE a.deal_id = deals.id
+    #                     )
+    #                   );""")
+    # conn.execute("""UPDATE deals
+    #                 SET
+    #                   status = NULL,
+    #                   last_updated = CURRENT_TIMESTAMP,
+    #                   last_updated_source = 'FIX_ABERCORN_STATUS'
+    #                 WHERE source = 'Abercorn'
+    #                   AND status = 'Active';""")
     # conn.execute("""UPDATE deals
     #                 SET industry = 'Consumer_Retail'
     #                 WHERE source = 'Knightsbridge'
