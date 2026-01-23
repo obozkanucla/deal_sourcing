@@ -15,6 +15,8 @@ SCRIPTS = [
     "import_knightsbridge.py",
     "import_hiltonsmythe.py",
     "import_transworld.py",
+    "import_abercorn.py",
+    "import_businesses4sale_generic.py"
 
     "enrich_axispartnership.py",
     "enrich_businessbuyers.py",
@@ -23,6 +25,7 @@ SCRIPTS = [
     "enrich_knightsbridge.py",
     "enrich_hiltonsmythe.py",
     "enrich_transworld.py",
+    "enrich_abercorn.py",
 
     "infer_sectors.py",
     "enrich_financials_from_description.py",
