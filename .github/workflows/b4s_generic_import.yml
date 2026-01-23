@@ -118,7 +118,7 @@ jobs:
 #        run: python -m src.scripts.import_abercorn
 
       - name: Import B4S Generic deals
-        run: python -m src.scripts.import_businesses4sale_generic.py
+        run: python -m src.scripts.import_businesses4sale_generic
 
 #      # --------------------------------------------------
 #      # Phase 2 — Enrichment
