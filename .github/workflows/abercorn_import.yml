@@ -135,7 +135,7 @@ jobs:
 #        run: python -m src.scripts.enrich_knightsbridge
 
       - name: Enrich Abercorn deals
-        run: python -m src.scripts.import_abercorn
+        run: python -m src.scripts.enrich_abercorn
 #
 #      # --------------------------------------------------
 #      # Phase 3 — Intelligence
