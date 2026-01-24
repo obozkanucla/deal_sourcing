@@ -1,7 +1,5 @@
 import sqlite3
 from pathlib import Path
-from datetime import datetime, date
-from typing import Optional
 from src.domain.deal_columns import DEAL_COLUMNS, sqlite_select_columns
 from datetime import date, datetime
 
@@ -404,7 +402,7 @@ class SQLiteRepository:
                     notes           = COALESCE(?, notes),
                     last_touch      = COALESCE(?, last_touch),
                     manual_decision = COALESCE(?, manual_decision),
-                    last_updated    = CURRENT_TIMESTAMP
+                    last_updated    = DATE ONLY (YYYY-MM-DD)
                 WHERE deal_id = ?
                 """,
                 (
