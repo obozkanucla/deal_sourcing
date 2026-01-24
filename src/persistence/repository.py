@@ -124,7 +124,7 @@ class SQLiteRepository:
                     extracted_json,
                     today_iso(),
                     today_iso(),
-                    now_iso(),
+                    today_iso(),
                     pdf_path,
                 ),
             )
