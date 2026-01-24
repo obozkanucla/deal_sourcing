@@ -168,8 +168,11 @@ jobs:
       # --------------------------------------------------
       # Phase 4 — Sync outputs
       # --------------------------------------------------
-      - name: Sync SQLite → Google Sheets
-        run: python -m src.scripts.sync_to_sheets
+      - name: Sync sheet data
+        run: SHEETS_PHASE=DATA python -m src.scripts.sync_to_sheets
+
+      - name: Format sheet
+        run: SHEETS_PHASE=FORMAT python -m src.scripts.sync_to_sheets
 
       # --------------------------------------------------
       # Persist canonical SQLite snapshot

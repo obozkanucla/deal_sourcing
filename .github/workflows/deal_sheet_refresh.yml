@@ -144,10 +144,22 @@ jobs:
 #        run: python -m src.scripts.recalculate_financial_metrics
 
       # --------------------------------------------------
-      # Phase 4 — Sync outputs
+      # Phase 4a — Data Phase
       # --------------------------------------------------
-      - name: Sync SQLite → Google Sheets
+      - name: Sync SQLite → Google Sheets (DATA)
         run: python -m src.scripts.sync_to_sheets
+        env:
+          FULL_REBUILD: "1"
+          SHEETS_PHASE: "DATA"
+
+      # --------------------------------------------------
+      # Phase 4b — Format Phase
+      # --------------------------------------------------
+      - name: Sync SQLite → Google Sheets (FORMAT)
+        run: python -m src.scripts.sync_to_sheets
+        env:
+          FULL_REBUILD: "0"
+          SHEETS_PHASE: "FORMAT"
 
       # --------------------------------------------------
       # Persist canonical SQLite snapshot

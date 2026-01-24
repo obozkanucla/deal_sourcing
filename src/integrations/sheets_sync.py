@@ -409,31 +409,26 @@ def update_folder_links(repo, ws):
 
     print(f"✅ Updated {len(updates)} Drive Folder links")
 
-def backfill_system_columns(repo, ws, columns, batch_size=100, force=False):
-    """
-    Backfill system-derived columns (title, industry, sector, location)
-    without overwriting existing sheet values.
-    Uses batch updates to avoid API quota issues.
-    """
+def backfill_system_columns(repo, ws, columns, batch_size=100):
+    from src.domain.deal_columns import DEAL_COLUMNS
 
-    values = ws.get_all_values()
-    if not values:
-        print("⚠️ Sheet is empty")
-        return
+    header_idx = {c.name: i for i, c in enumerate(DEAL_COLUMNS)}
 
-    headers = values[0]
-    rows = values[1:]
-    header_idx = {h: i for i, h in enumerate(headers)}
+    if "deal_uid" not in header_idx:
+        raise RuntimeError("deal_uid column missing")
+
+    # 🔑 minimal read
+    deal_uids = ws.col_values(header_idx["deal_uid"] + 1)
+
+    row_by_uid = {
+        uid.strip(): row_num
+        for row_num, uid in enumerate(deal_uids, start=1)
+        if uid.strip()
+    }
 
     updates = []
 
-    for row_offset, row in enumerate(rows):
-        row_num = row_offset + 2  # sheet rows start at 1, header is row 1
-
-        deal_uid = row[header_idx["deal_uid"]].strip()
-        if not deal_uid:
-            continue
-
+    for deal_uid, row_num in row_by_uid.items():
         try:
             source, source_listing_id = deal_uid.split(":", 1)
         except ValueError:
@@ -447,10 +442,6 @@ def backfill_system_columns(repo, ws, columns, batch_size=100, force=False):
             col_idx = header_idx.get(col)
             if col_idx is None:
                 continue
-            if not force:
-                if col_idx < len(row) and row[col_idx].strip():
-                    if col not in ("ebitda_margin", "revenue_multiple", "ebitda_multiple"):
-                        continue
 
             val = deal.get(col)
             if val is None:
@@ -461,13 +452,11 @@ def backfill_system_columns(repo, ws, columns, batch_size=100, force=False):
                 "values": [[val]],
             })
 
-        # Flush in batches #
         if len(updates) >= batch_size:
             sheets_write_with_backoff(lambda: ws.batch_update(updates))
             updates.clear()
-            time.sleep(1)  # stay well under quota
+            time.sleep(0.8)
 
-    # Flush remaining updates
     if updates:
         sheets_write_with_backoff(lambda: ws.batch_update(updates))
 

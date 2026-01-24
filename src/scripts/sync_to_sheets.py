@@ -40,10 +40,12 @@ from src.integrations.sheets_sync import ensure_sheet_headers
 SPREADSHEET_ID_Production = "1UoQ-uPHOoCsXoHkk6AUdioMTmpQa9m6dZPLJY3EtPRM"
 WORKSHEET_NAME = "Deals"
 SPREADSHEET_ID_Staging = "1Iioxt688xxw9fVbiixAMGrycwl22GqSh91p4EYsEAH0"
-FULL_REBUILD = True
+FULL_REBUILD = False
+PHASE = os.getenv("SHEETS_PHASE", "DATA").upper()
+assert PHASE in {"DATA", "FORMAT"}, f"Invalid SHEETS_PHASE: {PHASE}"
 
 PIPELINE_ENV = os.getenv("PIPELINE_ENV", "local")  # local | github
-# SHEET_MODE = os.getenv("SHEET_MODE", "test")       # prod | test
+# SHEET_MODE = os.getenv("SHEET_MODE", "test") # prod | test
 
 if PIPELINE_ENV == "prod":
     SPREADSHEET_ID = SPREADSHEET_ID_Production
@@ -52,61 +54,73 @@ else:
 
 DB_PATH = Path("db/deals.sqlite")
 
+import time
+from requests.exceptions import ConnectionError
+
+def safe_get_all_values(ws, retries=5):
+    for i in range(retries):
+        try:
+            return ws.get_all_values()
+        except ConnectionError as e:
+            if i == retries - 1:
+                raise
+            sleep = 2 ** i
+            print(f"⚠️ Sheets read failed, retrying in {sleep}s")
+            time.sleep(sleep)
+
 def sheets_sleep(base=0.3, jitter=0.4):
     time.sleep(base + random.random() * jitter)
 
 def main():
     print("📄 Google Sheet:")
-    print(PIPELINE_ENV)
-    print(f"   Spreadsheet ID: {SPREADSHEET_ID}")
-    print(f"   Worksheet: {WORKSHEET_NAME}")
-    print(f"   URL: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}")
-    repo = SQLiteRepository(DB_PATH)
-    print("USING DB:", repo.db_path.resolve())
+    print(PIPELINE_ENV, "| PHASE:", PHASE)
 
+    repo = SQLiteRepository(DB_PATH)
     gc = get_gspread_client()
     sh = gc.open_by_key(SPREADSHEET_ID)
     ws = sh.worksheet(WORKSHEET_NAME)
 
-    # unhide_all_columns(ws)
-
-    # 1️⃣ PULL analyst edits FIRST
+    # 1️⃣ ALWAYS pull analyst edits first
     pull_sheets_to_sqlite(repo, ws, columns=DEAL_COLUMNS)
-    sheets_sleep()
-
     repo.recompute_effective_fields()
     recalculate_financial_metrics()
-    sheets_sleep()
 
-    # 2️⃣ Optional destructive rebuild
-    reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
-    sheets_sleep()
+    # ======================================================
+    # 🟦 DATA PHASE — writes only
+    # ======================================================
+    if PHASE == "DATA":
 
-    # 3️⃣ ALWAYS ensure headers (safe)
-    ensure_sheet_headers(ws, DEAL_COLUMNS)
-    assert_schema_alignment(repo, ws)
-    sheets_sleep()
+        if FULL_REBUILD:
+            print("🧨 FULL REBUILD MODE (DATA PHASE)")
+            reset_sheet_state(ws, num_columns=len(DEAL_COLUMNS))
+            ensure_sheet_headers(ws, DEAL_COLUMNS)
+            assert_schema_alignment(repo, ws)
 
-    # 🔒 HARD SAFETY CHECK — FAIL FAST IF ORDER DRIFTS
-    headers = ws.row_values(1)
-    expected = [c.name for c in DEAL_COLUMNS]
-    assert headers == expected, (
-        "❌ Sheet headers do not match DEAL_COLUMNS order.\n"
-        f"Expected: {expected}\n"
-        f"Found:    {headers}"
-    )
+            push_sqlite_to_sheets(repo, ws)
+            print("✅ DATA PHASE COMPLETE (FULL REBUILD)")
+            return
 
-    # 4️⃣ Push SQLite → Sheets
-    push_sqlite_to_sheets(repo, ws)
-    sheets_sleep()
+        # incremental
+        ensure_sheet_headers(ws, DEAL_COLUMNS)
+        assert_schema_alignment(repo, ws)
 
-    # ✅ Always derive dimensions from sheet, never from rows_written
-    values = ws.get_all_values()
-    num_rows = len(values)
-    num_cols = len(DEAL_COLUMNS)
+        push_sqlite_to_sheets(repo, ws)
 
-    # 5️⃣ Formatting (gate heavy ops)
-    if FULL_REBUILD or num_rows > 0:
+        print("✅ DATA PHASE COMPLETE (INCREMENTAL)")
+        return
+    # ======================================================
+    # 🟩 FORMAT PHASE — reads + formatting only
+    # ======================================================
+    if PHASE == "FORMAT":
+
+        values = safe_get_all_values(ws)
+        num_rows = len(values)
+        num_cols = len(DEAL_COLUMNS)
+
+        headers = ws.row_values(1)
+        expected = [c.name for c in DEAL_COLUMNS]
+        assert headers == expected
+
         apply_dropdown_validations(ws)
         sheets_sleep()
 
@@ -128,46 +142,31 @@ def main():
         apply_pass_reason_required_formatting(ws)
         sheets_sleep()
 
-        apply_left_alignment(ws)
-        sheets_sleep()
+        # update_folder_links(repo, ws)
+        backfill_system_columns(
+            repo,
+            ws,
+            columns=[
+                "title",
+                "industry",
+                "sector",
+                "location",
+                "ebitda_margin",
+                "revenue_growth_pct",
+                "leverage_pct",
+            ]
+        )
 
-    # 6️⃣ Backfills (safe, idempotent)
-    update_folder_links(repo, ws)
-    sheets_sleep()
+        shrink_columns_by_name(ws, ["deal_uid", "source_listing_id"], width_px=2)
+        shrink_columns_by_name(ws, ["revenue_k", "ebitda_k", "asking_price_k"], width_px=2)
 
-    backfill_system_columns(
-        repo,
-        ws,
-        columns=[
-            "title",
-            "industry",
-            "sector",
-            "location",
-            "ebitda_margin",
-            "revenue_growth_pct",
-            "leverage_pct",
-        ]
-    )
-    # A = deal_uid, C = source_listing_id
-    shrink_columns_by_name(
-        ws,
-        ["deal_uid", "source_listing_id"],
-        width_px=2
-    )
-    shrink_columns_by_name(
-        ws,
-        ["revenue_k", "ebitda_k", "asking_price_k"],
-        width_px=2
-    )
+        highlight_analyst_editable_columns(ws)
+        protect_system_columns(
+            ws,
+            ["burak@sab.partners", "serdar@sab.partners", "adrien@sab.partners"]
+        )
 
-    highlight_analyst_editable_columns(ws)
-    sheets_sleep()
-
-    protect_system_columns(
-        ws,
-        ["burak@sab.partners", "serdar@sab.partners", "adrien@sab.partners"]
-    )
-    sheets_sleep()
+        print("✅ FORMAT PHASE COMPLETE")
 
 if __name__ == "__main__":
     main()
