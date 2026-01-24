@@ -218,7 +218,7 @@ def enrich_hiltonsmythe(limit: Optional[int] = None):
                             created_by="enrich_hiltonsmythe.py",
                         )
 
-                    fetched_at = datetime.utcnow().isoformat(timespec="seconds")
+                    fetched_at = datetime.today().isoformat()
                     drive_folder_url = (
                         f"https://drive.google.com/drive/folders/{deal_folder_id}"
                     )

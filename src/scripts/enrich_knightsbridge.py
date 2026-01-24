@@ -353,7 +353,7 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                         extraction_version=KNIGHTSBRIDGE_EXTRACTION_VERSION,
                         created_by="enrich_knightsbridge.py",
                     )
-                fetched_at = datetime.utcnow().isoformat(timespec="seconds")
+                fetched_at = datetime.today().isoformat()
                 drive_folder_url = f"https://drive.google.com/drive/folders/{deal_folder_id}"
                 if DRY_RUN:
                     print("DRY_RUN → would UPDATE deals:", row_id)

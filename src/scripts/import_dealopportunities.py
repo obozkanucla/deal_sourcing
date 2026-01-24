@@ -14,7 +14,7 @@ DRY_RUN_PREVIEW_LIMIT = 50  # safety cap for printing
 
 def main():
     repo = SQLiteRepository(Path("db/deals.sqlite"))
-    now = datetime.utcnow().isoformat(timespec="seconds")
+    now = datetime.today().isoformat()
 
     client = DealOpportunitiesClient()
     client.start()          # 🔑 REQUIRED

@@ -150,7 +150,7 @@ def main():
     gc = get_gspread_client()
     sh = gc.open_by_key(SPREADSHEET_ID)
 
-    now = datetime.utcnow().isoformat(timespec="seconds")
+    now = datetime.today().isoformat()
 
     imported = 0
     updated = 0

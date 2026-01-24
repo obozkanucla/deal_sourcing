@@ -152,7 +152,7 @@ def enrich_axispartnership(limit: Optional[int] = None) -> None:
                 description=description,
             )
             kpis        = _extract_kpis(html)
-            fetched_at  = datetime.utcnow().isoformat(timespec="seconds")
+            fetched_at  = datetime.today().isoformat()
 
             is_under_offer = kpis.get("status") == "under_offer"
 

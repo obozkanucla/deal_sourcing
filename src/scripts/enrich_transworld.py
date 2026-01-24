@@ -136,7 +136,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                             """,
                             (
                                 canonical_id,
-                                datetime.utcnow().isoformat(timespec="seconds"),
+                                datetime.today().isoformat(),
                                 deal["id"],
                             ),
                         )
@@ -183,7 +183,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                                 WHERE id = ?
                                 """,
                                 (
-                                    datetime.utcnow().isoformat(timespec="seconds"),
+                                    datetime.today().isoformat(),
                                     deal["id"]
                                 ),
                             )
@@ -236,7 +236,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
 
                     assert_valid_industry(industry)
 
-                    fetched_at = datetime.utcnow().isoformat(timespec="seconds")
+                    fetched_at = datetime.today().isoformat()
 
                     if DRY_RUN:
                         print("🔍 DRY RUN")

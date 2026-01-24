@@ -119,7 +119,7 @@ def main():
         return
 
     for r in records:
-        now = datetime.utcnow().isoformat(timespec="seconds")
+        now = datetime.today().isoformat()
         existing = repo.get_conn().execute(
             """
             SELECT 1

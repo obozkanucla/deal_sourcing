@@ -3,6 +3,13 @@ from pathlib import Path
 from datetime import datetime, date
 from typing import Optional
 from src.domain.deal_columns import DEAL_COLUMNS, sqlite_select_columns
+from datetime import date, datetime
+
+def today_iso():
+    return date.today().isoformat()
+
+def now_iso():
+    return datetime.today().isoformat(timespec="seconds")
 
 class SQLiteRepository:
     def __init__(self, db_path: Path):
@@ -77,8 +84,6 @@ class SQLiteRepository:
         extracted_json,
         pdf_path
     ):
-        now = datetime.utcnow().isoformat()
-        today = date.today().isoformat()
 
         with self.get_conn() as conn:
             conn.execute(
@@ -117,9 +122,9 @@ class SQLiteRepository:
                     decision_confidence,
                     reasons,
                     extracted_json,
-                    today,
-                    today,
-                    now,
+                    today_iso(),
+                    today_iso(),
+                    now_iso(),
                     pdf_path,
                 ),
             )
@@ -165,7 +170,6 @@ class SQLiteRepository:
             last_updated: str | None = None,
             last_updated_source: str | None = None,
     ):
-        now = datetime.utcnow().isoformat(timespec="seconds")
 
         with self.get_conn() as conn:
             if source == "BusinessBuyers":
@@ -198,7 +202,7 @@ class SQLiteRepository:
                         turnover_range_raw,
                         first_seen,
                         last_seen,
-                        last_updated or now,
+                        last_updated or now_iso(),
                         last_updated_source or "AUTO",
                     ),
                 )
@@ -225,7 +229,7 @@ class SQLiteRepository:
                         location_raw,
                         turnover_range_raw,
                         last_seen,
-                        last_updated or now,
+                        last_updated or now_iso(),
                         last_updated_source or "AUTO",
                         source_url,
                     ),
@@ -257,7 +261,7 @@ class SQLiteRepository:
                         turnover_range_raw,
                         first_seen,
                         last_seen,
-                        last_updated or now,
+                        last_updated or now_iso(),
                         last_updated_source or "AUTO",
                     ),
                 )
@@ -284,7 +288,7 @@ class SQLiteRepository:
                         turnover_range_raw,
                         first_seen,
                         last_seen,
-                        last_updated or now,
+                        last_updated or now_iso(),
                         last_updated_source or "AUTO",
                         source_url,
                     ),
@@ -325,7 +329,7 @@ class SQLiteRepository:
                         turnover_range_raw,
                         first_seen,
                         last_seen,
-                        last_updated or now,
+                        last_updated or now_iso(),
                         last_updated_source or "AUTO",
 
                     ),
@@ -549,7 +553,7 @@ class SQLiteRepository:
         if not fields:
             return
 
-        fields["detail_fetched_at"] = datetime.utcnow().isoformat()
+        fields["detail_fetched_at"] = datetime.today().isoformat()
         fields["needs_detail_refresh"] = 0
 
         assignments = ", ".join(f"{k} = ?" for k in fields.keys())
@@ -684,7 +688,6 @@ class SQLiteRepository:
         """
 
         source_url = f"internal://{deal['source']}/{deal['source_listing_id']}"
-        now = datetime.utcnow().isoformat()
 
         with self.get_conn() as conn:
             conn.execute(
@@ -734,7 +737,7 @@ class SQLiteRepository:
                     deal["notes"],
                     deal["first_seen"],                  # only used on INSERT
                     deal["last_seen"],                   # updated on re-seen
-                    now,
+                    now_iso(),
                 ),
             )
 

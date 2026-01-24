@@ -466,7 +466,7 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                             pdf_drive_url,
                             deal_folder_id,
                             deal_folder_id,
-                            datetime.utcnow().isoformat(timespec="seconds"),
+                            datetime.today().isoformat(),
                             row_id,
                         ),
                     )

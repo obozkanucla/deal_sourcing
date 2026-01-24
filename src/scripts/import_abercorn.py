@@ -110,7 +110,7 @@ def import_abercorn():
                     sector_source,
                     confidence,
                     reason,
-                    datetime.utcnow(),
+                    datetime.today().isoformat(),
                 ),
             )
             inserted += 1
