@@ -1,3 +1,10 @@
+24/01/2026
+UPDATE deals
+SET
+  first_seen   = substr(first_seen, 1, 10),
+  last_seen    = substr(last_seen, 1, 10),
+  last_updated = substr(last_updated, 1, 10);
+
 20/01/2026
 UPDATE deals
 SET industry = 'Consumer_Retail'

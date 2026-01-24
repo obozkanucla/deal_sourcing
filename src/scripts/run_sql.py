@@ -9,18 +9,23 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""SELECT
-                      COUNT(*) AS total,
-                      SUM(needs_detail_refresh = 0) AS not_refreshable,
-                      SUM(drive_folder_id IS NULL) AS missing_folder,
-                      SUM(NOT EXISTS (
-                            SELECT 1
-                            FROM deal_artifacts a
-                            WHERE a.deal_id = deals.id
-                          )) AS missing_artifacts
-                    FROM deals
-                    WHERE source = 'Abercorn'
-                      AND (status IS NULL OR status != 'Lost');""")
+    conn.execute("""UPDATE deals
+                    SET
+                      first_seen   = substr(first_seen, 1, 10),
+                      last_seen    = substr(last_seen, 1, 10),
+                      last_updated = substr(last_updated, 1, 10);""")
+    # conn.execute("""SELECT
+    #                   COUNT(*) AS total,
+    #                   SUM(needs_detail_refresh = 0) AS not_refreshable,
+    #                   SUM(drive_folder_id IS NULL) AS missing_folder,
+    #                   SUM(NOT EXISTS (
+    #                         SELECT 1
+    #                         FROM deal_artifacts a
+    #                         WHERE a.deal_id = deals.id
+    #                       )) AS missing_artifacts
+    #                 FROM deals
+    #                 WHERE source = 'Abercorn'
+    #                   AND (status IS NULL OR status != 'Lost');""")
     # conn.execute("""UPDATE deals
     #                 SET
     #                   needs_detail_refresh = 1,
