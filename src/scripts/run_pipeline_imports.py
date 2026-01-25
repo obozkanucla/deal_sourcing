@@ -15,6 +15,8 @@ SCRIPTS = [
     "import_knightsbridge.py",
     "import_hiltonsmythe.py",
     "import_transworld.py",
+    "import_abercorn.py",
+    "import_businesses4sale_generic.py",
 ]
 
 FAILURE_REPORT_PATH = PROJECT_ROOT / "pipeline_failures.json"
