@@ -89,6 +89,7 @@ jobs:
         env:
           FORCE_CURRENT_WEEK: "1"
         run: python -m src.scripts.orchestration.orchestrate_reporting
+
       # --------------------------------------------------
       # Persist canonical SQLite snapshot
       # --------------------------------------------------
