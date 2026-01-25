@@ -157,6 +157,8 @@ def main():
             ]
         )
 
+        hide_columns(ws,["canonical_external_id", "broker_name", "broker_listing_url"])
+
         shrink_columns_by_name(ws, ["deal_uid", "source_listing_id"], width_px=2)
         shrink_columns_by_name(ws, ["revenue_k", "ebitda_k", "asking_price_k"], width_px=2)
 

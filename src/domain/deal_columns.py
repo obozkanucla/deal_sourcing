@@ -69,8 +69,12 @@ DEAL_COLUMNS = [
     ColumnSpec("priority", push=True, pull=True),
     ColumnSpec("notes", push=True, pull=True),
 
-    ColumnSpec("pass_reason", push=True, pull=True)
+    ColumnSpec("pass_reason", push=True, pull=True),
 
+    # --- Deal columns to cater for Aggregator Websites ---
+    ColumnSpec("canonical_external_id", push=True, pull=False, system=True,),
+    ColumnSpec("broker_name",push=True, pull=False, system=True,),
+    ColumnSpec("broker_listing_url", push=True, pull=False, system=True,),
 
 ]
 

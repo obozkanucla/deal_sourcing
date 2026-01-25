@@ -26,7 +26,7 @@ SCRIPTS = [
     "enrich_hiltonsmythe.py",
     "enrich_transworld.py",
     "enrich_abercorn.py",
-    "enrich_businesses4sale_generic.py",
+    # "enrich_businesses4sale_generic.py",
 
     # "infer_sectors.py",
     # "enrich_financials_from_description.py",
