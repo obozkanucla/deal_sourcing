@@ -146,20 +146,28 @@ jobs:
       # --------------------------------------------------
       # Phase 4a — Data Phase
       # --------------------------------------------------
-      - name: Sync SQLite → Google Sheets (DATA)
-        run: python -m src.scripts.sync_to_sheets
-        env:
-          FULL_REBUILD: "1"
-          SHEETS_PHASE: "DATA"
+      - name: Sheets DATA phase (retry-safe)
+        run: |
+          set -e
+          for i in 1 2 3; do
+            echo "▶ DATA phase attempt $i"
+            SHEETS_PHASE=DATA python -m src.scripts.sync_to_sheets && exit 0
+            sleep $((i * 15))
+          done
+          exit 1
 
       # --------------------------------------------------
       # Phase 4b — Format Phase
       # --------------------------------------------------
-      - name: Sync SQLite → Google Sheets (FORMAT)
-        run: python -m src.scripts.sync_to_sheets
-        env:
-          FULL_REBUILD: "0"
-          SHEETS_PHASE: "FORMAT"
+      - name: Sheets FORMAT phase (retry-safe)
+        run: |
+          set -e
+          for i in 1 2 3; do
+            echo "▶ FORMAT phase attempt $i"
+            SHEETS_PHASE=FORMAT python -m src.scripts.sync_to_sheets && exit 0
+            sleep $((i * 20))
+          done
+          exit 1
 
       # --------------------------------------------------
       # Persist canonical SQLite snapshot
