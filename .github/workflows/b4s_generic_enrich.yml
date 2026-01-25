@@ -136,6 +136,10 @@ jobs:
 #      - name: Enrich Knightsbridge
 #        run: python -m src.scripts.enrich_knightsbridge
 
+      - name: Job heartbeat
+        run: |
+          echo "🕒 B4S Generic Enrichment started at $(date -u)"
+
       - name: Enrich B4S Generic deals
         run: python -m src.scripts.enrich_businesses4sale_generic
 #
