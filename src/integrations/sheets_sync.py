@@ -1061,6 +1061,7 @@ def hide_columns(ws, col_indices: list[int]):
     Hide columns by zero-based index.
     Safe to run repeatedly.
     """
+
     requests = []
 
     for idx in col_indices:

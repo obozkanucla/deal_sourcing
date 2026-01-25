@@ -157,7 +157,12 @@ def main():
             ]
         )
 
-        hide_columns(ws,["canonical_external_id", "broker_name", "broker_listing_url"])
+        def column_indices_by_name(names: list[str]) -> list[int]:
+            name_to_idx = {c.name: i for i, c in enumerate(DEAL_COLUMNS)}
+            return [name_to_idx[n] for n in names if n in name_to_idx]
+
+        hide_columns(ws,
+                     column_indices_by_name(["canonical_external_id", "broker_name", "broker_listing_url"]))
 
         shrink_columns_by_name(ws, ["deal_uid", "source_listing_id"], width_px=2)
         shrink_columns_by_name(ws, ["revenue_k", "ebitda_k", "asking_price_k"], width_px=2)
