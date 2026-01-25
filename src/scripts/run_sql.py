@@ -9,11 +9,15 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""UPDATE deals
-                    SET
-                      first_seen   = substr(first_seen, 1, 10),
-                      last_seen    = substr(last_seen, 1, 10),
-                      last_updated = substr(last_updated, 1, 10);""")
+    conn.execute("""ALTER TABLE deals ADD COLUMN canonical_external_id TEXT;
+                    ALTER TABLE deals ADD COLUMN broker_name TEXT;
+                    ALTER TABLE deals ADD COLUMN broker_listing_url TEXT;
+                    ALTER TABLE deals ADD COLUMN source_role TEXT DEFAULT 'PRIMARY';""")
+    # conn.execute("""UPDATE deals
+    #                 SET
+    #                   first_seen   = substr(first_seen, 1, 10),
+    #                   last_seen    = substr(last_seen, 1, 10),
+    #                   last_updated = substr(last_updated, 1, 10);""")
     # conn.execute("""SELECT
     #                   COUNT(*) AS total,
     #                   SUM(needs_detail_refresh = 0) AS not_refreshable,

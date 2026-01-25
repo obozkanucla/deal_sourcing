@@ -75,7 +75,7 @@ DEAL_COLUMNS = [
     ColumnSpec("canonical_external_id", push=True, pull=False, system=True,),
     ColumnSpec("broker_name",push=True, pull=False, system=True,),
     ColumnSpec("broker_listing_url", push=True, pull=False, system=True,),
-
+    ColumnSpec("source_role", push=True, pull=False, system=True,),
 ]
 
 def deal_column_names():
