@@ -71,13 +71,25 @@ def safe_get_all_values(ws, retries=5):
 def sheets_sleep(base=0.3, jitter=0.4):
     time.sleep(base + random.random() * jitter)
 
+def open_sheet_with_retry(gc, spreadsheet_id, retries=5):
+    for i in range(retries):
+        try:
+            return gc.open_by_key(spreadsheet_id)
+        except Exception as e:
+            if i == retries - 1:
+                raise
+            sleep = 2 ** i
+            print(f"⚠️ Sheets open failed, retrying in {sleep}s: {e}")
+            time.sleep(sleep)
+
 def main():
     print("📄 Google Sheet:")
     print(PIPELINE_ENV, "| PHASE:", PHASE)
 
     repo = SQLiteRepository(DB_PATH)
     gc = get_gspread_client()
-    sh = gc.open_by_key(SPREADSHEET_ID)
+
+    sh = open_sheet_with_retry(gc, SPREADSHEET_ID)
     ws = sh.worksheet(WORKSHEET_NAME)
 
     # 1️⃣ ALWAYS pull analyst edits first
