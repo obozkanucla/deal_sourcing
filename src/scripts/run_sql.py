@@ -9,7 +9,11 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""ALTER TABLE deals ADD COLUMN attributes TEXT;""")
+    conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
+                    idx_deals_source_canonical_external_id
+                    ON deals(source, canonical_external_id)
+                    WHERE canonical_external_id IS NOT NULL;""")
+    # conn.execute("""ALTER TABLE deals ADD COLUMN attributes TEXT;""")
     # conn.execute("""ALTER TABLE deals ADD COLUMN canonical_external_id TEXT;""")
     # conn.execute("""ALTER TABLE deals ADD COLUMN broker_name TEXT;""")
     # conn.execute("""ALTER TABLE deals ADD COLUMN broker_listing_url TEXT;""")

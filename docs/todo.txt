@@ -1,3 +1,23 @@
+27/01/2026
+CREATE UNIQUE INDEX IF NOT EXISTS
+idx_deals_source_canonical_external_id
+ON deals(source, canonical_external_id)
+WHERE canonical_external_id IS NOT NULL;
+
+25/01/2026
+ALTER TABLE deals ADD COLUMN attributes TEXT;
+
+ALTER TABLE deals ADD COLUMN canonical_external_id TEXT;
+ALTER TABLE deals ADD COLUMN broker_name TEXT;
+ALTER TABLE deals ADD COLUMN broker_listing_url TEXT;
+ALTER TABLE deals ADD COLUMN source_role TEXT DEFAULT 'PRIMARY';
+-- PRIMARY | AGGREGATOR
+
+CREATE UNIQUE INDEX idx_canonical_external_id
+ON deals(canonical_external_id)
+WHERE canonical_external_id IS NOT NULL;
+
+
 24/01/2026
 UPDATE deals
 SET
