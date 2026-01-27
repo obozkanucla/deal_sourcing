@@ -180,8 +180,20 @@ jobs:
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
+      - name: Notify Slack – Job Failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          channel-id: ${{ secrets.SLACK_PIPELINE_JOB_UPDATE_CHANNEL_ID }}
+          payload: |
+            {
+              "text": "*${{ github.workflow }}*\nStatus: *FAILED*\nReason: Job exited non-zero\nRun: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
       - name: Notify Slack – Success
-        if: env.HAS_FAILURES != 'true'
+        if: success() && env.HAS_FAILURES != 'true'
         uses: slackapi/slack-github-action@v1
         with:
           channel-id: ${{ secrets.SLACK_PIPELINE_JOB_UPDATE_CHANNEL_ID }}

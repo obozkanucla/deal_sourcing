@@ -76,6 +76,10 @@ DEAL_COLUMNS = [
     ColumnSpec("broker_name",push=True, pull=False, system=True,),
     ColumnSpec("broker_listing_url", push=True, pull=False, system=True,),
     ColumnSpec("source_role", push=True, pull=False, system=True,),
+
+    # --- Flexible broker / enrichment metadata ---
+    ColumnSpec("attributes", push=True, pull=False, system=True),
+
 ]
 
 def deal_column_names():
@@ -83,7 +87,6 @@ def deal_column_names():
 
 
 VIRTUAL_COLUMNS = {"deal_uid"}
-
 
 def sqlite_select_columns() -> list[str]:
     """

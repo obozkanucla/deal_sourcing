@@ -1157,3 +1157,25 @@ class SQLiteRepository:
                     f"-{freshness_days} days",
                 ),
             ).fetchall()
+
+    def find_primary_by_url(self, url: str) -> dict | None:
+        """
+        Find an existing PRIMARY deal matching a broker or source URL.
+        Used by aggregator imports (e.g. Daltons).
+        """
+        with self.get_conn() as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM deals
+                WHERE source_role = 'PRIMARY'
+                  AND (
+                    source_url = ?
+                        OR broker_listing_url = ?
+                    )
+                    LIMIT 1
+                """,
+                (url, url),
+            ).fetchone()
+
+        return dict(row) if row else None

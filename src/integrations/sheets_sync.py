@@ -153,17 +153,34 @@ def sheets_write_with_backoff(fn, *, max_retries=5):
             time.sleep(sleep)
     raise RuntimeError("Sheets quota exceeded after retries")
 
+from gspread.exceptions import APIError
+
 def ensure_sheet_headers(ws, columns):
     expected = [c.name for c in columns]
 
-    ws.clear()
-    ws.resize(rows=2, cols=len(expected))
-    ws.update("A1", [expected])
+    # Read existing headers
+    current = ws.row_values(1)
 
-    actual = ws.row_values(1)
-    assert actual == expected, "Sheet header mismatch after reset"
+    # Case 1: Sheet empty → write headers once
+    if not current:
+        try:
+            ws.update("A1", [expected])
+            print("🧱 Sheet headers written (empty sheet)")
+        except APIError as e:
+            print(f"⚠️ Header write failed, continuing: {e}")
+        return
 
-    print("🧱 Sheet headers reset and written")
+    # Case 2: Headers already correct → do nothing
+    if current == expected:
+        print("🧱 Sheet headers already correct")
+        return
+
+    # Case 3: Mismatch → HARD FAIL (this is a real bug)
+    raise RuntimeError(
+        "Sheet header mismatch.\n"
+        f"Found:    {current}\n"
+        f"Expected: {expected}"
+    )
 
 # -----------------------------
 # PUSH: SQLite → Sheets
@@ -646,7 +663,10 @@ def reset_sheet_state(ws, num_columns: int):
     ws.clear()
 
     # 3️⃣ Resize safely
-    ws.resize(rows=2, cols=num_columns)
+    try:
+        ws.resize(rows=2, cols=num_columns)
+    except APIError as e:
+        print(f"⚠️ Resize failed during reset, continuing: {e}")
 
     print("🧼 Sheet fully reset (safe resize)")
 
