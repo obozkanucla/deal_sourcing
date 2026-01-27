@@ -231,6 +231,7 @@ def enrich_hiltonsmythe(limit: Optional[int] = None):
                             """
                             UPDATE deals
                             SET
+                                canonical_external_id = COALESCE(canonical_external_id, ?),
                                 description              = ?,
                                 drive_folder_id          = ?,
                                 drive_folder_url         = ?,
@@ -243,6 +244,7 @@ def enrich_hiltonsmythe(limit: Optional[int] = None):
                             WHERE id = ?
                             """,
                             (
+                                canonical_id,
                                 description,
                                 deal_folder_id,
                                 drive_folder_url,

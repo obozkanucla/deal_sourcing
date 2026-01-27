@@ -9,6 +9,71 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'Abercorn'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'AxisPartnership'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'BusinessBuyers'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'BusinessSaleReport'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'BusinessesForSale'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'BusinessesForSale_Generic'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'Daltons'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'DealOpportunities'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = 'HS-' || source_listing_id
+                    WHERE source = 'HiltonSmythe'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = 'KB-' || source_listing_id
+                    WHERE source = 'Knightsbridge'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'transworld_uk'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'Dmitry'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
+    conn.execute("""UPDATE deals
+                    SET canonical_external_id = source_listing_id
+                    WHERE source = 'LegacySheet'
+                      AND canonical_external_id IS NULL
+                      AND source_listing_id IS NOT NULL;""")
     conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
                     idx_deals_source_canonical_external_id
                     ON deals(source, canonical_external_id)

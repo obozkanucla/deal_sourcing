@@ -81,7 +81,7 @@ def find_existing_mv_owner(conn, mv_id: str, current_row_id: int) -> Optional[in
         SELECT id
         FROM deals
         WHERE source IN ("BusinessesForSale", "BusinessesForSale_Generic")
-          AND source_listing_id = ?
+          AND canonical_external_id = ?
           AND id != ?
         """,
         (mv_id, current_row_id),
@@ -175,7 +175,7 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                 row_id = deal["id"]
                 url = deal["source_url"]
 
-                print(f"\n➡️ [{i}/{len(deals)}] {deal['source_listing_id']}")
+                print(f"\n➡️ [{i}/{len(deals)}] {deal['source_listing_id']} → {mv_id}")
                 print(url)
 
                 context = browser.new_context(
@@ -414,10 +414,7 @@ def enrich_businesses4sale(limit: Optional[int] = None) -> None:
                         """
                         UPDATE deals
                         SET
-                            source_listing_id = CASE
-                                WHEN source_listing_id IS NULL THEN ?
-                                ELSE source_listing_id
-                            END,
+                            canonical_external_id = COALESCE(canonical_external_id, ?),
                             title = ?,
                             location = ?,
                             description = ?,

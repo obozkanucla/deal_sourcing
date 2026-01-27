@@ -241,7 +241,7 @@ def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
                     context.close()
                     continue
 
-                listing_id = extract_listing_id(soup, slug)
+                canonical_external_id = extract_listing_id(soup, slug)
                 financials = extract_b4s_financials(soup)
 
                 content_hash = compute_content_hash(
@@ -251,7 +251,7 @@ def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
                 )
 
                 # ---------------- PDF ----------------
-                pdf_path = PDF_ROOT / f"{listing_id}.pdf"
+                pdf_path = PDF_ROOT / f"{canonical_external_id}.pdf"
 
                 page.add_style_tag(content="""
                 body * { visibility: hidden !important; }
@@ -290,7 +290,7 @@ def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
 
                 deal_folder_id = find_or_create_deal_folder(
                     parent_folder_id=parent_folder_id,
-                    deal_id=f"B4S-GEN-{listing_id}",
+                    deal_id=f"B4S-GEN-{canonical_external_id}",
                     deal_title=title,
                 )
 
@@ -298,7 +298,7 @@ def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
 
                 pdf_drive_url = upload_pdf_to_drive(
                     local_path=pdf_path,
-                    filename=f"{listing_id}.pdf",
+                    filename=f"{canonical_external_id}.pdf",
                     folder_id=deal_folder_id,
                 )
                 conn.execute(
@@ -317,10 +317,10 @@ def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
                 record_deal_artifact(
                     conn=conn,
                     source=SOURCE,
-                    source_listing_id=listing_id,
+                    source_listing_id=canonical_external_id,
                     deal_id=row_id,
                     artifact_type="pdf",
-                    artifact_name=f"{listing_id}.pdf",
+                    artifact_name=f"{canonical_external_id}.pdf",
                     artifact_hash=pdf_hash,
                     drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
                     drive_url=pdf_drive_url,
@@ -335,7 +335,7 @@ def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
                     """
                     UPDATE deals
                     SET
-                        source_listing_id = ?,
+                        canonical_external_id = COALESCE(canonical_external_id, ?),
                         title = ?,
                         description = ?,
                         location = ?,
@@ -362,7 +362,7 @@ def enrich_businesses4sale_generic(limit: Optional[int] = None) -> None:
                     WHERE id = ?
                     """,
                     (
-                        listing_id,
+                        canonical_external_id,
                         title,
                         description,
                         location,

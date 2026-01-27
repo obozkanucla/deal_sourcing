@@ -370,6 +370,7 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                         """
                         UPDATE deals
                          SET
+                            canonical_external_id = COALESCE(canonical_external_id, ?),
                             description                 = ?,
                             asking_price_k              = COALESCE(asking_price_k, ?),
                         
@@ -391,6 +392,7 @@ def enrich_knightsbridge(limit: Optional[int] = None):
                         WHERE id = ?
                         """,
                         (
+                            canonical_id,
                             description,
                             asking_price_k,
                             industry,
