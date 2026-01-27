@@ -1,9 +1,6 @@
 name: B4S Generic Enrichment
 
 on:
-  schedule:
-    # Every hour, on the hour (UTC)
-    - cron: "* * * * *"
   workflow_dispatch:
 
 permissions:

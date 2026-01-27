@@ -5,28 +5,60 @@
 CREATE TABLE IF NOT EXISTS deals (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    -- Identity
     source TEXT NOT NULL,
     source_listing_id TEXT NOT NULL,
-    source_url TEXT NOT NULL,
+    source_url TEXT,
 
-    -- Index-level metadata
+    title TEXT,
+    industry TEXT,
     sector TEXT,
+    sector_raw TEXT,
+    sector_source TEXT,
+    sector_inference_confidence REAL,
+    sector_inference_reason TEXT,
 
-    -- Detail-level analysis
+    location TEXT,
+    location_raw TEXT,
+
+    revenue_k REAL,
+    ebitda_k REAL,
+    asking_price_k REAL,
+
+    revenue_k_effective REAL,
+    ebitda_k_effective REAL,
+    asking_price_k_effective REAL,
+
+    revenue_k_manual REAL,
+    ebitda_k_manual REAL,
+    asking_price_k_manual REAL,
+
     content_hash TEXT,
-    decision TEXT,
-    decision_confidence REAL,
-    reasons TEXT,
+    description TEXT,
+    description_hash TEXT,
     extracted_json TEXT,
 
-    -- Lifecycle tracking
-    first_seen DATE,
-    last_seen DATE,
-    last_updated DATETIME,
+    drive_folder_id TEXT,
+    drive_folder_url TEXT,
+    pdf_drive_url TEXT,
+    pdf_generated_at DATETIME,
+    pdf_error TEXT,
 
-    -- Artifacts
-    pdf_path TEXT,
+    needs_detail_refresh INTEGER DEFAULT 1,
+    detail_fetched_at DATETIME,
+    detail_fetch_reason TEXT,
+    lost_reason TEXT,
+
+    canonical_external_id TEXT,
+    broker_name TEXT,
+    broker_listing_url TEXT,
+    source_role TEXT DEFAULT 'PRIMARY',
+
+    first_seen DATETIME,
+    last_seen DATETIME,
+    last_updated DATETIME,
+    last_updated_source TEXT,
+
+    attributes TEXT,
 
     UNIQUE (source, source_listing_id)
 );

@@ -2,6 +2,7 @@ import sqlite3
 from pathlib import Path
 from src.domain.deal_columns import DEAL_COLUMNS, sqlite_select_columns
 from datetime import date, datetime
+from src.persistence.schema_guard import assert_deals_schema
 
 def today_iso():
     return date.today().isoformat()
@@ -16,17 +17,13 @@ class SQLiteRepository:
         self.db_path = project_root / db_path
         print("📀 SQLite DB path:", self.db_path.resolve())
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
         self.DEALS_DB_COLUMNS = {
             c.name
             for c in DEAL_COLUMNS
             if c.pull and not c.system
         }
-
-    def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
-            with open(Path(__file__).parent / "schema.sql") as f:
-                conn.executescript(f.read())
+        with self.get_conn() as conn:
+            assert_deals_schema(conn)
 
     def fetch_all(self, sql: str, params=()):
         with self.get_conn() as conn:
