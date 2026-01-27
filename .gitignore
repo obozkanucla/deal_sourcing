@@ -13,7 +13,7 @@ ms-playwright/
 # SQLite backups (local only)
 db/deals_pre_reset_*.sqlite
 
-# Security Controls
+# Security Controls - corrected
 .env
 .env.*
 *.env.env
