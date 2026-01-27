@@ -9,10 +9,11 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""ALTER TABLE deals ADD COLUMN canonical_external_id TEXT;""")
-    conn.execute("""ALTER TABLE deals ADD COLUMN broker_name TEXT;""")
-    conn.execute("""ALTER TABLE deals ADD COLUMN broker_listing_url TEXT;""")
-    conn.execute("""ALTER TABLE deals ADD COLUMN source_role TEXT DEFAULT 'PRIMARY';""")
+    conn.execute("""ALTER TABLE deals ADD COLUMN attributes TEXT;""")
+    # conn.execute("""ALTER TABLE deals ADD COLUMN canonical_external_id TEXT;""")
+    # conn.execute("""ALTER TABLE deals ADD COLUMN broker_name TEXT;""")
+    # conn.execute("""ALTER TABLE deals ADD COLUMN broker_listing_url TEXT;""")
+    # conn.execute("""ALTER TABLE deals ADD COLUMN source_role TEXT DEFAULT 'PRIMARY';""")
     # conn.execute("""UPDATE deals
     #                 SET
     #                   first_seen   = substr(first_seen, 1, 10),
