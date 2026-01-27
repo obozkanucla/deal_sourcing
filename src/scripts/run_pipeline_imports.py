@@ -8,18 +8,15 @@ from src.utils.run_scripts import run_script
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 SCRIPTS = [
-    "import_abercorrn.py"
     "import_axispartnership.py",
-    "import_bsr.py",
     "import_businessbuyers.py",
-    "import_businesses4sale_generic.py",
     "import_businesses4sale_vault.py",
-    "import_daltons.py",
     "import_dealopportunities.py",
-    "import_hiltonsmythe.py",
     "import_knightsbridge.py",
+    "import_hiltonsmythe.py",
     "import_transworld.py",
-
+    "import_abercorn.py",
+    "import_businesses4sale_generic.py",
 ]
 
 FAILURE_REPORT_PATH = PROJECT_ROOT / "pipeline_failures.json"

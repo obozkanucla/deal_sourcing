@@ -294,7 +294,6 @@ def enrich_dealopportunities():
                         """
                             UPDATE deals
                             SET
-                                canonical_external_id = COALESCE(canonical_external_id, ?),
                                 title = ?,
                                 description = ?,
                                 location_raw = ?,
@@ -315,7 +314,6 @@ def enrich_dealopportunities():
                             WHERE id = ?
                         """,
                         (
-                            deal_key,
                             title,
                             description,
                             location_raw,

@@ -261,7 +261,6 @@ def enrich_daltons(limit: Optional[int] = None) -> None:
                     """
                     UPDATE deals
                     SET
-                        canonical_external_id = COALESCE(canonical_external_id, ?),
                         title = ?,
                         description = ?,
                         sector_raw = ?,
@@ -279,7 +278,6 @@ def enrich_daltons(limit: Optional[int] = None) -> None:
                     WHERE id = ?
                     """,
                     (
-                        listing_id,
                         title,
                         description,
                         sector_raw,

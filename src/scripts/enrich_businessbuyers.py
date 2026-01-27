@@ -107,7 +107,7 @@ def _find_existing_ref_owner(conn, ref_id: str, current_row_id: int) -> Optional
         SELECT id
         FROM deals
         WHERE source = 'BusinessBuyers'
-          AND canonical_external_id = ?
+          AND source_listing_id = ?
           AND id != ?
         """,
         (ref_id, current_row_id),
@@ -316,7 +316,7 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
             conn.execute(
                 """
                 UPDATE deals
-                SET canonical_external_id       = ?,
+                SET source_listing_id           = ?,
                     title                       = ?,
                     description                 = ?,
 
@@ -344,7 +344,7 @@ def enrich_businessbuyers(limit: Optional[int] = None) -> None:
                 WHERE id = ?
                 """,
                 (
-                    ref_id,  # ← canonical_external_id
+                    ref_id,
                     title,
                     description,
                     asking_price_k,

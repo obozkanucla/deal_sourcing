@@ -125,7 +125,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                         conn.execute(
                             """
                             UPDATE deals
-                            SET canonical_external_id    = COALESCE(canonical_external_id, ?),
+                            SET source_listing_id    = ?,
                                 status               = 'Lost',
                                 lost_reason          = 'Marked SOLD in listing',
                                 needs_detail_refresh = 0,
@@ -197,7 +197,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                         SELECT id
                         FROM deals
                         WHERE source = ?
-                          AND canonical_external_id = ?
+                          AND source_listing_id = ?
                           AND id != ?
                         """,
                         (SOURCE, listing_number, deal["id"]),
@@ -299,7 +299,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                     conn.execute(
                         """
                         UPDATE deals
-                        SET canonical_external_id = COALESCE(canonical_external_id, ?),
+                        SET source_listing_id = ?,
                             description = ?,
                             location = ?,
                             sector_raw = ?,
