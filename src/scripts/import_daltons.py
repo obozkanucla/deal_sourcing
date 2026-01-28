@@ -23,7 +23,7 @@ SOURCE = "Daltons"
 BASE_URL = "https://www.daltonsbusiness.com"
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 
-DRY_RUN = os.getenv("DRY_RUN", "1") == "1"
+DRY_RUN = False #os.getenv("DRY_RUN", "1") == "1"
 MAX_PAGES = int(os.getenv("DALTONS_MAX_PAGES", "50"))
 SLEEP_SECS = float(os.getenv("DALTONS_SLEEP", "1.2"))
 

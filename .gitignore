@@ -18,3 +18,5 @@ db/deals_pre_reset_*.sqlite
 .env.*
 *.env.env
 config/google/token.pickle
+
+db/*.sqlite
