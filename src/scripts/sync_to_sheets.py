@@ -181,9 +181,12 @@ def main():
         shrink_columns_by_name(ws, ["revenue_k", "ebitda_k", "asking_price_k"], width_px=2)
 
         highlight_analyst_editable_columns(ws)
+        SERVICE_ACCOUNT_EMAIL = "sqlite-to-sheets@deal-pipeline-sync.iam.gserviceaccount.com"
+
         protect_system_columns(
             ws,
-            ["burak@sab.partners", "serdar@sab.partners", "adrien@sab.partners"]
+            ["burak@sab.partners", "serdar@sab.partners", "adrien@sab.partners",
+             SERVICE_ACCOUNT_EMAIL]
         )
 
         print("✅ FORMAT PHASE COMPLETE")
