@@ -1,14 +1,9 @@
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-import pickle
-from pathlib import Path
-from pathlib import Path
 import os
 import pickle
+from pathlib import Path
 
+import google.auth
 from google.auth.transport.requests import Request
-from google.oauth2 import service_account
 from google_auth_oauthlib.flow import InstalledAppFlow
 
 
@@ -21,23 +16,15 @@ def get_google_credentials():
     """
     Credential resolution order:
 
-    1. CI → Service Account (non-interactive, required)
+    1. CI → Workload Identity Federation (google.auth.default)
     2. Local → token.pickle (cached user OAuth)
     3. Local → interactive OAuth (fallback)
     """
 
-    # --- CI MODE (MANDATORY NON-INTERACTIVE) ---
+    # --- CI MODE: Workload Identity Federation ---
     if os.getenv("CI") == "true":
-        sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        if not sa_path:
-            raise RuntimeError(
-                "CI is true but GOOGLE_APPLICATION_CREDENTIALS is not set"
-            )
-
-        return service_account.Credentials.from_service_account_file(
-            sa_path,
-            scopes=DEFAULT_SCOPES,
-        )
+        creds, _ = google.auth.default(scopes=DEFAULT_SCOPES)
+        return creds
 
     # --- LOCAL / DEV MODE ---
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -59,7 +46,7 @@ def get_google_credentials():
             pickle.dump(creds, token)
         return creds
 
-    # --- LAST RESORT: interactive OAuth (LOCAL ONLY) ---
+    # --- LOCAL ONLY: interactive OAuth ---
     flow = InstalledAppFlow.from_client_secrets_file(
         creds_path,
         scopes=DEFAULT_SCOPES,
