@@ -3,6 +3,14 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 import pickle
 from pathlib import Path
+from pathlib import Path
+import os
+import pickle
+
+from google.auth.transport.requests import Request
+from google.oauth2 import service_account
+from google_auth_oauthlib.flow import InstalledAppFlow
+
 
 DEFAULT_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -10,10 +18,29 @@ DEFAULT_SCOPES = [
 ]
 
 def get_google_credentials():
+    """
+    Credential resolution order:
 
-    # Resolve project root (…/deal_sourcing)
+    1. CI → Service Account (non-interactive, required)
+    2. Local → token.pickle (cached user OAuth)
+    3. Local → interactive OAuth (fallback)
+    """
+
+    # --- CI MODE (MANDATORY NON-INTERACTIVE) ---
+    if os.getenv("CI") == "true":
+        sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if not sa_path:
+            raise RuntimeError(
+                "CI is true but GOOGLE_APPLICATION_CREDENTIALS is not set"
+            )
+
+        return service_account.Credentials.from_service_account_file(
+            sa_path,
+            scopes=DEFAULT_SCOPES,
+        )
+
+    # --- LOCAL / DEV MODE ---
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
-
     token_path = PROJECT_ROOT / "config/google/token.pickle"
     creds_path = PROJECT_ROOT / "config/google/credentials.json"
 
@@ -23,18 +50,24 @@ def get_google_credentials():
         with open(token_path, "rb") as token:
             creds = pickle.load(token)
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                creds_path,
-                scopes=DEFAULT_SCOPES,
-            )
-            creds = flow.run_local_server(port=0)
+    if creds and creds.valid:
+        return creds
 
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
         with open(token_path, "wb") as token:
             pickle.dump(creds, token)
+        return creds
+
+    # --- LAST RESORT: interactive OAuth (LOCAL ONLY) ---
+    flow = InstalledAppFlow.from_client_secrets_file(
+        creds_path,
+        scopes=DEFAULT_SCOPES,
+    )
+    creds = flow.run_local_server(port=0)
+
+    with open(token_path, "wb") as token:
+        pickle.dump(creds, token)
 
     return creds
 
