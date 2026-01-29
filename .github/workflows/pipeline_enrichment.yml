@@ -37,7 +37,7 @@ jobs:
       # -----------------------------
       # Pipeline safety
       # -----------------------------
-      PIPELINE_ENV: github
+      PIPELINE_ENV: prod
 
     steps:
       - name: Record start time
@@ -65,6 +65,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Debug pipeline env
+        run: |
+          echo "PIPELINE_ENV=$PIPELINE_ENV"
 
       # --------------------------------------------------
       # Playwright
