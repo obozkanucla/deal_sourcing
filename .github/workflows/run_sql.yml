@@ -23,6 +23,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/252263644220/locations/global/workloadIdentityPools/github-actions-pool/providers/github-provider
+          service_account: sqlite-to-sheets@deal-pipeline-sync.iam.gserviceaccount.com
+
       # --------------------------------------------------
       # Python
       # --------------------------------------------------
