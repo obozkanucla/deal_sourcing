@@ -89,11 +89,11 @@ jobs:
       # --------------------------------------------------
       # Phase 0 — Legacy imports
       # --------------------------------------------------
-      - name: Import legacy deals
-        run: python -m src.scripts.import_legacy_deals
-
-      - name: Import Dmitry deals
-        run: python -m src.scripts.import_dmitry_deals
+#      - name: Import legacy deals
+#        run: python -m src.scripts.import_legacy_deals
+#
+#      - name: Import Dmitry deals
+#        run: python -m src.scripts.import_dmitry_deals
 
       # --------------------------------------------------
       # Phase 1 — Broker Enrichment
