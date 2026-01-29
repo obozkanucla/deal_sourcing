@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write   # required for GitHub Releases
   actions: read
+  id-token: write
 
 jobs:
   pipeline:
