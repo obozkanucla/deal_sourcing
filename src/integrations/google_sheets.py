@@ -3,6 +3,8 @@ import gspread
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 import pickle
+import os
+import json
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -12,6 +14,13 @@ TOKEN_PATH = BASE_DIR / "config/google/token.pickle"
 
 
 def get_gspread_client():
+    # --- CI / GitHub Actions ---
+    if os.getenv("GITHUB_ACTIONS") == "true":
+        import google.auth
+        creds, _ = google.auth.default(scopes=SCOPES)
+        return gspread.authorize(creds)
+
+    # --- Local dev (unchanged) ---
     creds = None
 
     if TOKEN_PATH.exists():
