@@ -663,10 +663,14 @@ def reset_sheet_state(ws, num_columns: int):
     ws.clear()
 
     # 3️⃣ Resize safely
-    try:
-        ws.resize(rows=2, cols=num_columns)
-    except APIError as e:
-        print(f"⚠️ Resize failed during reset, continuing: {e}")
+    if ws.col_count < num_columns:
+        try:
+            ws.resize(rows=2, cols=num_columns)
+        except APIError as e:
+            if e.response.status_code == 503:
+                print("⚠️ Resize failed (503). Skipping schema enforcement.")
+                return  # ← THIS is the missing part
+            raise
 
     print("🧼 Sheet fully reset (safe resize)")
 
