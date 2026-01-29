@@ -29,6 +29,7 @@ from src.integrations.google_drive import (
 )
 from src.utils.hash_utils import compute_content_hash, compute_file_hash
 from src.utils.financial_normalization import _normalize_money_to_k
+from src.sector_mappings.bsr import BSR_SECTOR_MAP
 
 # -------------------------------------------------
 # CONFIG
@@ -44,7 +45,7 @@ PDF_ROOT.mkdir(parents=True, exist_ok=True)
 DETAIL_WAIT_SELECTOR = "body"
 SLEEP_BETWEEN = (2, 4)
 
-DRY_RUN = True
+DRY_RUN = False
 HEADLESS = True
 
 BSR_EXTRACTION_VERSION = "v1-detail"
@@ -194,6 +195,22 @@ def enrich_bsr(limit: Optional[int] = None) -> None:
                 canonical_external_id = extract_web_reference(soup)
                 sector_raw = extract_bsr_sector_raw(soup)
 
+                # --- Canonical sector resolution (mandatory) ---
+                if not sector_raw:
+                    raise RuntimeError("BSR sector_raw missing")
+
+                sector_key = sector_raw.strip().lower()
+
+                if sector_key not in BSR_SECTOR_MAP:
+                    raise RuntimeError(f"Unmapped BSR sector_raw: {sector_raw}")
+
+                sector_meta = BSR_SECTOR_MAP[sector_key]
+
+                industry = sector_meta["industry"]
+                sector = sector_meta["sector"]
+                sector_confidence = sector_meta["confidence"]
+                sector_reason = sector_meta["reason"]
+
                 if not title or not canonical_external_id:
                     print("⚠️ Missing critical fields")
                     context.close()
@@ -254,7 +271,7 @@ def enrich_bsr(limit: Optional[int] = None) -> None:
                 pdf_hash = compute_file_hash(pdf_path)
 
                 parent_folder_id = get_drive_parent_folder_id(
-                    industry="Unclassified",
+                    industry=industry,
                     broker="BusinessSaleReport",
                 )
 
@@ -277,6 +294,13 @@ def enrich_bsr(limit: Optional[int] = None) -> None:
                         title = ?,
                         location = ?,
                         sector_raw = ?,
+                        
+                        industry = ?,
+                        sector = ?,
+                        sector_source = 'bsr',
+                        sector_inference_confidence = ?,
+                        sector_inference_reason = ?,
+                        
                         canonical_external_id = ?,
                         revenue_k = ?,
                         asking_price_k = ?,
@@ -294,6 +318,10 @@ def enrich_bsr(limit: Optional[int] = None) -> None:
                         title,
                         location_raw,
                         sector_raw,
+                        industry,
+                        sector,
+                        sector_confidence,
+                        sector_reason,
                         canonical_external_id,
                         financials["revenue_k"],
                         financials["asking_price_k"],

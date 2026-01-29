@@ -27,7 +27,7 @@ from src.integrations.google_drive import (
     upload_pdf_to_drive,
 )
 from src.utils.hash_utils import compute_content_hash, compute_file_hash
-from src.sector_mappings.daltons import map_daltons_sector
+from src.sector_mappings.daltons import DALTONS_SECTOR_MAP
 
 # -------------------------------------------------
 # CONFIG

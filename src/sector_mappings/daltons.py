@@ -1,67 +1,69 @@
-"""
-Daltons → Canonical Industry / Sector Mapping
-
-Source:
-- Daltons breadcrumb taxonomy (detail pages)
-- Broker-declared, hierarchical
-"""
-
-BROKER_NAME = "Daltons"
-
 DALTONS_SECTOR_MAP = {
+    # --- Business services ---
+    "business to business (b2b)": "Business_Services",
+    "service businesses": "Business_Services",
+    "business service franchises": "Business_Services",
+    "corporate businesses": "Business_Services",
+    "professional businesses": "Business_Services",
 
-    # -----------------------------
-    # RETAIL
-    # -----------------------------
-    "Off Licences": {
-        "industry": "Consumer_Retail",
-        "sector": "Alcohol Retail",
-        "confidence": 0.95,
-        "reason": "Daltons breadcrumb: Off Licences",
-    },
+    # --- Construction / built environment ---
+    "construction businesses": "Construction_Built_Environment",
+    "commercial properties": "Construction_Built_Environment",
+    "property franchises": "Construction_Built_Environment",
+    "home improvement franchises": "Construction_Built_Environment",
 
-    # -----------------------------
-    # SERVICES
-    # -----------------------------
-    "Garden Repair Businesses": {
-        "industry": "Consumer_Services",
-        "sector": "Gardening & Landscaping Services",
-        "confidence": 0.95,
-        "reason": "Daltons breadcrumb: Garden Repair Businesses",
-    },
+    # --- Consumer & retail ---
+    "retail businesses": "Consumer_Retail",
+    "home based businesses": "Consumer_Retail",
+    "mobile businesses": "Consumer_Retail",
+    "pubs": "Consumer_Retail",
+    "hotels": "Consumer_Retail",
+    "entertainment & leisure businesses": "Consumer_Retail",
 
-    # add incrementally
+    # --- Food & beverage ---
+    "food service businesses": "Food_Beverage",
+    "cafes": "Food_Beverage",
+    "restaurants": "Food_Beverage",
+    "food and drink franchises": "Food_Beverage",
+
+    # --- Healthcare ---
+    "care businesses": "Healthcare",
+    "medical / health businesses": "Healthcare",
+    "health & wellbeing businesses": "Healthcare",
+
+    # --- Education ---
+    "education": "Education",
+    "training & education providers": "Education",
+    "child education franchises": "Education",
+
+    # --- Industrials ---
+    "manufacturing businesses": "Industrials",
+    "engineering businesses": "Industrials",
+    "agricultural & gardening businesses": "Industrials",
+    "marine businesses": "Industrials",
+    "environmental businesses": "Industrials",
+
+    # --- Logistics & distribution ---
+    "distribution businesses": "Logistics_Distribution",
+    "motor & transport businesses": "Logistics_Distribution",
+    "courier companies": "Logistics_Distribution",
+    "haulage companies": "Logistics_Distribution",
+    "wholesale / distribution businesses": "Logistics_Distribution",
+
+    # --- Technology ---
+    "technology businesses": "Technology",
+    "online businesses": "Technology",
+    "it / telecoms businesses": "Technology",
+    "software businesses": "Technology",
+
+    # --- Financial ---
+    "finance / professional businesses": "Financial_Services",
+    "investment & financial service businesses": "Financial_Services",
+    "insurance broker businesses": "Financial_Services",
+    "mortgage broker businesses": "Financial_Services",
+
+    # --- Fallback (explicit) ---
+    "miscellaneous businesses": "Other",
+    "other service businesses": "Other",
+    "other retail businesses": "Other",
 }
-
-def map_daltons_sector(*, sector_raw: str | None):
-    if not sector_raw:
-        return {
-            "industry": "Other",
-            "sector": "Miscellaneous",
-            "confidence": 0.2,
-            "reason": "Missing Daltons sector",
-            "sector_source": "unclassified",
-        }
-
-    parts = [
-        p.strip()
-        for p in sector_raw.split(">")
-        if p.strip() and p.strip() != "Business"
-    ]
-
-    # try leaf → root
-    for key in reversed(parts):
-        mapping = DALTONS_SECTOR_MAP.get(key)
-        if mapping:
-            return {
-                **mapping,
-                "sector_source": "broker_declared",
-            }
-
-    return {
-        "industry": "Other",
-        "sector": "Miscellaneous",
-        "confidence": 0.3,
-        "reason": f"Unmapped Daltons sector '{sector_raw}'",
-        "sector_source": "unclassified",
-    }
