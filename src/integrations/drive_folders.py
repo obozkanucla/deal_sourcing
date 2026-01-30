@@ -28,8 +28,8 @@ CANONICAL_INDUSTRY_FOLDERS = {
     "Technology":                       "1KdA-m9R6gjICTxRO0Sxd_3VAMu4aGZMy",
     "Healthcare":                       "1BwuX7y1sQFprgoYkctA09nUsfiUUPrbj",
     "Other":                            "1RKZ-FY6PQIxVVd2Rv4x1zSEIM59S-z9k",
-    "Agriculture":                      "1iudhlz8bskA4xvs7nn4gWYx7sS113nwZ",
-    "Franchise_Businesses":             "1OHfQ4JqYc14cmVaMLJtKn9grIUcESHYE"
+    "Agriculture":                      "1WAzP0mcZOsdMyGigBsYlQDQKFk_Yeb_h",
+    "Franchise_Businesses":             "1j2WaQe1JbyRbqQ_2AUzuSy7HphPTAPn4"
 }
 
 # ============================================================
