@@ -87,23 +87,29 @@ jobs:
       # --------------------------------------------------
       # Debug schema
       # --------------------------------------------------
-      - name: Inspect Abercorn enrichment state
+      - name: Total deals by source
+        run: |
+          sqlite3 db/deals.sqlite <<'SQL'
+          SELECT source, COUNT(*) FROM deals GROUP BY source;
+          SQL
+      - name: Total deals with descrition by source
         run: |
           sqlite3 db/deals.sqlite <<'SQL'
           SELECT
-          COUNT(*) AS total,
-          SUM(needs_detail_refresh = 0) AS not_refreshable,
-          SUM(drive_folder_id IS NULL) AS missing_folder,
-          SUM(NOT EXISTS (
-               SELECT 1
-               FROM deal_artifacts a
-               WHERE a.deal_id = deals.id
-             )) AS missing_artifacts
+            source,
+            COUNT(*) AS total,
+            SUM(description IS NOT NULL) AS with_description
           FROM deals
-          WHERE source = 'Abercorn'
-          AND (status IS NULL OR status != 'Lost');
+          GROUP BY source;
           SQL
-
+      - name: Total deals with detailed data by source
+        run: |
+          sqlite3 db/deals.sqlite <<'SQL'
+          SELECT
+            source,
+            SUM(detail_fetched_at IS NOT NULL) AS detailed
+          FROM deals
+          GROUP BY source;
       - name: Debug SQLite schema
         run: |
           python - << 'EOF'
