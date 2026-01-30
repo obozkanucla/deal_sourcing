@@ -9,9 +9,18 @@ def column_exists(conn, table, column):
     )
 
 with repo.get_conn() as conn:
-    conn.execute("""SELECT source, status, is_enriched, COUNT(*)
+    conn.execute("""SELECT source, COUNT(*) FROM deals GROUP BY source;""")
+    conn.execute("""SELECT
+                      source,
+                      COUNT(*) AS total,
+                      SUM(description IS NOT NULL) AS with_description
                     FROM deals
-                    GROUP BY 1,2,3;""")
+                    GROUP BY source;""")
+    conn.execute("""SELECT
+                      source,
+                      SUM(detail_fetched_at IS NOT NULL) AS detailed
+                    FROM deals
+                    GROUP BY source;""")
     # conn.execute("""CREATE UNIQUE INDEX IF NOT EXISTS
     #                 idx_deals_source_canonical_external_id
     #                 ON deals(source, canonical_external_id)
