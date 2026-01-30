@@ -1,4 +1,4 @@
-name: Pipeline - Imports
+name: Broker - Import & Enrichment
 
 on:
   workflow_dispatch:
@@ -31,13 +31,6 @@ jobs:
       # -----------------------------
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
-
-      # -----------------------------
-      # Google APIs (OAuth user)
-      # -----------------------------
-      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
-      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
-      GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
 
       # -----------------------------
       # Pipeline safety
@@ -103,8 +96,11 @@ jobs:
       # --------------------------------------------------
       # Phase 1 — Broker Imports
       # --------------------------------------------------
-      - name: Broker imports
-        run: python -m src.scripts.run_pipeline_imports
+      - name: Broker import
+        run: python -m src.scripts.import_abercorn
+
+      - name: Broker enrichment
+        run: python -m src.scripts.enrich_abercorn
 
       # --------------------------------------------------
       # Phase 4a — Data Phase
