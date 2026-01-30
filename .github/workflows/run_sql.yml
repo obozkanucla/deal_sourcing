@@ -15,7 +15,7 @@ jobs:
 
     env:
       PLAYWRIGHT_HEADLESS: "1"
-      PIPELINE_ENV: github
+      PIPELINE_ENV: prod
 
     steps:
       # --------------------------------------------------
