@@ -43,7 +43,7 @@ PDF_ROOT.mkdir(parents=True, exist_ok=True)
 DETAIL_WAIT_SELECTOR = "body"
 SLEEP_BETWEEN = (3, 6)
 
-DRY_RUN = 1 # os.getenv("DRY_RUN", "1") == "1"
+DRY_RUN = 0 # os.getenv("DRY_RUN", "1") == "1"
 HEADLESS = True
 
 DALTONS_EXTRACTION_VERSION = "v1-detail"
@@ -192,6 +192,33 @@ def enrich_daltons(limit: Optional[int] = None) -> None:
                 sector_raw = extract_daltons_sector_raw(soup)
                 location = extract_location(soup)
 
+                # --- Canonical sector resolution (Daltons) ---
+                if not sector_raw:
+                    # Daltons edge case: some hotel / overseas listings have no breadcrumbs
+                    industry = "Other"
+                    sector = "Other"
+                    sector_confidence = 0.4
+                    sector_reason = "Daltons listing without breadcrumb (Other)"
+                else:
+                    # split breadcrumbs and take SECOND level
+                    crumbs = [c.strip().lower() for c in sector_raw.split(">")]
+
+                    if len(crumbs) < 2:
+                        raise RuntimeError(f"Unexpected Daltons breadcrumb: {sector_raw}")
+
+                    sector_key = crumbs[1]
+
+                    if sector_key not in DALTONS_SECTOR_MAP:
+                        raise RuntimeError(f"Unmapped Daltons sector breadcrumb: {sector_key}")
+
+                    industry = DALTONS_SECTOR_MAP[sector_key]
+
+                    # Daltons does not provide a clean sub-sector → keep coarse
+                    sector = industry
+
+                    sector_confidence = 0.6
+                    sector_reason = f"Daltons category: {sector_key}"
+
                 if not title or not description:
                     print("⚠️ Incomplete content")
                     context.close()
@@ -219,6 +246,7 @@ def enrich_daltons(limit: Optional[int] = None) -> None:
                 if DRY_RUN:
                     print("🔍 DRY RUN – PDF / Drive / DB skipped")
                     print("sector_raw:", sector_raw)
+                    print("industry:", industry)
 
                     csv_writer.writerow({
                         "source_listing_id": listing_id,
@@ -240,7 +268,7 @@ def enrich_daltons(limit: Optional[int] = None) -> None:
 
                 # ---------------- Drive ----------------
                 parent_folder_id = get_drive_parent_folder_id(
-                    industry="Unclassified",
+                    industry=industry,
                     broker="Daltons",
                 )
 
@@ -264,6 +292,13 @@ def enrich_daltons(limit: Optional[int] = None) -> None:
                         title = ?,
                         description = ?,
                         sector_raw = ?,
+                        
+                        industry = ?,
+                        sector = ?,
+                        sector_source = 'daltons',
+                        sector_inference_confidence = ?,
+                        sector_inference_reason = ?,
+                        
                         location = ?,
                         content_hash = ?,
 
@@ -281,6 +316,10 @@ def enrich_daltons(limit: Optional[int] = None) -> None:
                         title,
                         description,
                         sector_raw,
+                        industry,
+                        sector,
+                        sector_confidence,
+                        sector_reason,
                         location,
                         content_hash,
                         deal_folder_id,

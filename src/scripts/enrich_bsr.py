@@ -196,20 +196,23 @@ def enrich_bsr(limit: Optional[int] = None) -> None:
                 sector_raw = extract_bsr_sector_raw(soup)
 
                 # --- Canonical sector resolution (mandatory) ---
-                if not sector_raw:
-                    raise RuntimeError("BSR sector_raw missing")
-
-                sector_key = sector_raw.strip().lower()
-
-                if sector_key not in BSR_SECTOR_MAP:
-                    raise RuntimeError(f"Unmapped BSR sector_raw: {sector_raw}")
-
-                sector_meta = BSR_SECTOR_MAP[sector_key]
-
-                industry = sector_meta["industry"]
-                sector = sector_meta["sector"]
-                sector_confidence = sector_meta["confidence"]
-                sector_reason = sector_meta["reason"]
+                if sector_raw:
+                    mapping = BSR_SECTOR_MAP.get(sector_raw.lower())
+                    if mapping:
+                        industry = mapping["industry"]
+                        sector = mapping["sector"]
+                        sector_confidence = mapping["confidence"]
+                        sector_reason = mapping["reason"]
+                    else:
+                        industry = "Other"
+                        sector = "Other"
+                        sector_confidence = 0.4
+                        sector_reason = f"BSR unmapped sector_raw: {sector_raw}"
+                else:
+                    industry = "Other"
+                    sector = "Other"
+                    sector_confidence = 0.4
+                    sector_reason = "BSR listing without declared sector (explicit fallback)"
 
                 if not title or not canonical_external_id:
                     print("⚠️ Missing critical fields")

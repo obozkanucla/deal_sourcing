@@ -66,4 +66,5 @@ DALTONS_SECTOR_MAP = {
     "miscellaneous businesses": "Other",
     "other service businesses": "Other",
     "other retail businesses": "Other",
+    "franchise resales businesses": "Franchise_Businesses",
 }

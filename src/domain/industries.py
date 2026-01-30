@@ -25,6 +25,8 @@ CANONICAL_INDUSTRIES: set[str] = {
     "Logistics_Distribution",
     "Other",
     "Technology",
+    "Franchise_Businesses",
+    "Agriculture"
 }
 
 # ------------------------------------------------------------------
