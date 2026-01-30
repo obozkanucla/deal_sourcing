@@ -111,8 +111,19 @@ def extract_location(soup: BeautifulSoup) -> Optional[str]:
     return p.get_text(strip=True) if p else None
 
 
-def is_lost_listing(soup: BeautifulSoup) -> bool:
-    return soup.select_one("h1") is None
+def is_bsr_sold_listing(soup: BeautifulSoup) -> bool:
+    h1 = soup.select_one("h1")
+    if not h1:
+        return False  # true parser failure, not SOLD
+
+    h1_text = h1.get_text(strip=True).lower()
+
+    terminal_phrases = [
+        "no longer in our listings",
+        "no business found",
+    ]
+
+    return any(p in h1_text for p in terminal_phrases)
 
 
 # -------------------------------------------------
@@ -184,8 +195,23 @@ def enrich_bsr(limit: Optional[int] = None) -> None:
 
                 soup = BeautifulSoup(page.content(), "html.parser")
 
-                if is_lost_listing(soup):
-                    print("⚠️ Lost listing")
+                if is_bsr_sold_listing(soup):
+                    print("🏁 SOLD / removed listing detected")
+
+                    if not DRY_RUN:
+                        conn.execute(
+                            """
+                            UPDATE deals
+                            SET status               = 'Lost',
+                                needs_detail_refresh = 0,
+                                last_updated         = CURRENT_TIMESTAMP,
+                                last_updated_source  = 'AUTO'
+                            WHERE id = ?
+                            """,
+                            (deal["id"],),
+                        )
+                        conn.commit()
+
                     context.close()
                     continue
 
