@@ -74,6 +74,7 @@ def sheets_sleep(base=0.3, jitter=0.4):
 def open_sheet_with_retry(gc, spreadsheet_id, retries=5):
     for i in range(retries):
         try:
+            print(gc.auth.service_account_email)
             return gc.open_by_key(spreadsheet_id)
         except Exception as e:
             if i == retries - 1:
