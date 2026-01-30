@@ -96,11 +96,11 @@ jobs:
       # --------------------------------------------------
       # Phase 1 — Broker Imports
       # --------------------------------------------------
-#      - name: Broker import
-#        run: python -m src.scripts.import_bsr
+      - name: Broker import
+        run: python -m src.scripts.import_bsr
 
-      - name: Broker enrichment
-        run: python -m src.scripts.enrich_bsr
+#      - name: Broker enrichment
+#        run: python -m src.scripts.enrich_bsr
 
       # --------------------------------------------------
       # Phase 4a — Data Phase

@@ -29,7 +29,7 @@ BASE_URL = "https://www.business-sale.com"
 
 DB_PATH = Path(__file__).resolve().parents[2] / "db" / "deals.sqlite"
 
-DRY_RUN = os.getenv("DRY_RUN", "1") == "0"
+DRY_RUN = False #os.getenv("DRY_RUN", "1") == "0"
 MAX_PAGES = int(os.getenv("BSR_MAX_PAGES", "500"))
 SLEEP_SECS = float(os.getenv("BSR_SLEEP", "1.0"))
 
