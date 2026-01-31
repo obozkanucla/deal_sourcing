@@ -103,32 +103,6 @@ jobs:
         run: python -m src.scripts.enrich_bsr
 
       # --------------------------------------------------
-      # Phase 4a — Data Phase
-      # --------------------------------------------------
-      - name: Sheets DATA phase (retry-safe)
-        run: |
-          set -e
-          for i in 1 2 3; do
-            echo "▶ DATA phase attempt $i"
-            SHEETS_PHASE=DATA python -m src.scripts.sync_to_sheets && exit 0
-            sleep $((i * 15))
-          done
-          exit 1
-
-      # --------------------------------------------------
-      # Phase 4b — Format Phase
-      # --------------------------------------------------
-#      - name: Sheets FORMAT phase (retry-safe)
-#        run: |
-#          set -e
-#          for i in 1 2 3; do
-#            echo "▶ FORMAT phase attempt $i"
-#            SHEETS_PHASE=FORMAT python -m src.scripts.sync_to_sheets && exit 0
-#            sleep $((i * 20))
-#          done
-#          exit 1
-
-      # --------------------------------------------------
       # Persist canonical SQLite snapshot
       # --------------------------------------------------
       - name: Publish SQLite snapshot to GitHub Release
@@ -146,6 +120,32 @@ jobs:
           JOB_END_TS=$(date +%s)
           echo "JOB_END_TS=$JOB_END_TS" >> $GITHUB_ENV
           echo "JOB_DURATION_MIN=$(( (JOB_END_TS - JOB_START_TS) / 60 ))" >> $GITHUB_ENV
+
+            # --------------------------------------------------
+      # Phase 4a — Data Phase
+      # --------------------------------------------------
+      - name: Sheets DATA phase (retry-safe)
+        run: |
+          set -e
+          for i in 1 2 3; do
+            echo "▶ DATA phase attempt $i"
+            SHEETS_PHASE=DATA python -m src.scripts.sync_to_sheets && exit 0
+            sleep $((i * 15))
+          done
+          exit 1
+
+      # --------------------------------------------------
+      # Phase 4b — Format Phase
+      # --------------------------------------------------
+      - name: Sheets FORMAT phase (retry-safe)
+        run: |
+          set -e
+          for i in 1 2 3; do
+            echo "▶ FORMAT phase attempt $i"
+            SHEETS_PHASE=FORMAT python -m src.scripts.sync_to_sheets && exit 0
+            sleep $((i * 20))
+          done
+          exit 1
 
       # --------------------------------------------------
       # Detect script-level failures
