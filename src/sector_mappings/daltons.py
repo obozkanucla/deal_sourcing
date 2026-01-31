@@ -21,6 +21,7 @@ DALTONS_SECTOR_MAP = {
     "hotels": "Consumer_Retail",
     "entertainment & leisure businesses": "Consumer_Retail",
     "childrens activity & play businesses": "Consumer_Retail",
+    "animal & pet businesses": "Consumer_Retail",
 
     # --- Food & beverage ---
     "food service businesses": "Food_Beverage",
