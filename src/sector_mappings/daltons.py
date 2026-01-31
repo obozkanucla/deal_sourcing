@@ -19,6 +19,7 @@ DALTONS_SECTOR_MAP = {
     "pubs": "Consumer_Retail",
     "hotels": "Consumer_Retail",
     "entertainment & leisure businesses": "Consumer_Retail",
+    "childrens activity & play businesses": "Consumer_Retail",
 
     # --- Food & beverage ---
     "food service businesses": "Food_Beverage",
@@ -34,7 +35,6 @@ DALTONS_SECTOR_MAP = {
     # --- Education ---
     "education": "Education",
     "training & education providers": "Education",
-    "child education franchises": "Education",
 
     # --- Industrials ---
     "manufacturing businesses": "Industrials",
@@ -68,6 +68,8 @@ DALTONS_SECTOR_MAP = {
     "other retail businesses": "Other",
     "franchise resales businesses": "Franchise_Businesses",
     "home based franchises": "Franchise_Businesses",
+    "child education franchises": "Franchise_Businesses",
+
 }
 # TODO: Review unmapped Daltons breadcrumbs periodically and
 # promote stable ones into DALTONS_SECTOR_MAP
