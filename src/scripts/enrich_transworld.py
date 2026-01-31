@@ -95,38 +95,30 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
     if not deals:
         return
 
-    conn = repo.get_conn()   # ✅ SINGLE CONNECTION
+    conn = repo.get_conn()   # single connection
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
 
         try:
             for i, deal in enumerate(deals, start=1):
-                slug = deal["source_listing_id"]
                 url = deal["source_url"]
                 title = deal["title"] or ""
+                row_id = deal["id"]
 
-                print(f"\n➡️ [{i}/{len(deals)}] {slug}")
+                print(f"\n➡️ [{i}/{len(deals)}] {deal['source_listing_id']}")
                 print(url)
 
                 # -------------------------------
-                # SOLD → LOST
+                # SOLD → LOST (NO ID MUTATION)
                 # -------------------------------
-                current_identifier = deal["source_listing_id"] or ""
-
                 if "sold" in title.lower() or "/sold" in url.lower():
-                    canonical_id = (
-                        current_identifier
-                        if current_identifier.startswith("TW-SOLD-")
-                        else f"TW-SOLD-{current_identifier}"
-                    )
-                    print("⚠️ Marked SOLD — canonicalising + setting Lost")
+                    print("⚠️ Marked SOLD — setting Lost (identity preserved)")
                     if not DRY_RUN:
                         conn.execute(
                             """
                             UPDATE deals
-                            SET source_listing_id    = ?,
-                                status               = 'Lost',
+                            SET status               = 'Lost',
                                 lost_reason          = 'Marked SOLD in listing',
                                 needs_detail_refresh = 0,
                                 detail_fetched_at    = ?,
@@ -135,9 +127,8 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                             WHERE id = ?
                             """,
                             (
-                                canonical_id,
                                 datetime.today().isoformat(),
-                                deal["id"],
+                                row_id,
                             ),
                         )
                         conn.commit()
@@ -166,7 +157,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                     raw_listing_number = extract_listing_number(soup)
 
                     # -------------------------------
-                    # HARD LOST: redirect / no detail
+                    # HARD LOST
                     # -------------------------------
                     if not raw_listing_number:
                         print("⚠️ Listing number missing — marking Lost")
@@ -174,49 +165,51 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                             conn.execute(
                                 """
                                 UPDATE deals
-                                SET status = 'Lost',
-                                    lost_reason = 'Redirected to listings index',
+                                SET status               = 'Lost',
+                                    lost_reason          = 'Redirected to listings index',
                                     needs_detail_refresh = 0,
-                                    detail_fetched_at = ?,
-                                    last_updated = CURRENT_TIMESTAMP,
-                                    last_updated_source = 'AUTO'
+                                    detail_fetched_at    = ?,
+                                    last_updated         = CURRENT_TIMESTAMP,
+                                    last_updated_source  = 'AUTO'
                                 WHERE id = ?
                                 """,
                                 (
                                     datetime.today().isoformat(),
-                                    deal["id"]
+                                    row_id,
                                 ),
                             )
                             conn.commit()
                         continue
 
-                    listing_number = f"TW-{raw_listing_number}"
+                    canonical_external_id = f"TW-{raw_listing_number}"
 
+                    # -------------------------------
+                    # DEDUPE (canonical_external_id)
+                    # -------------------------------
                     existing = conn.execute(
                         """
                         SELECT id
                         FROM deals
                         WHERE source = ?
-                          AND source_listing_id = ?
+                          AND canonical_external_id = ?
                           AND id != ?
                         """,
-                        (SOURCE, listing_number, deal["id"]),
+                        (SOURCE, canonical_external_id, row_id),
                     ).fetchone()
 
                     if existing:
-                        print("⚠️ Duplicate Transworld listing number — skipping override")
+                        print("⚠️ Duplicate Transworld canonical_external_id — quarantining")
                         conn.execute(
                             """
                             UPDATE deals
-                            SET
-                                needs_detail_refresh = 0,
+                            SET needs_detail_refresh = 0,
                                 detail_fetched_at    = CURRENT_TIMESTAMP,
                                 detail_fetch_reason  = 'canonicalised_elsewhere',
                                 last_updated         = CURRENT_TIMESTAMP,
                                 last_updated_source  = 'AUTO'
-                            WHERE id = ?;
+                            WHERE id = ?
                             """,
-                            (deal["id"],),
+                            (row_id,),
                         )
                         conn.commit()
                         continue
@@ -245,7 +238,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                     # -------------------------------
                     # PDF
                     # -------------------------------
-                    pdf_path = PDF_ROOT / f"{listing_number}.pdf"
+                    pdf_path = PDF_ROOT / f"{canonical_external_id}.pdf"
                     page.emulate_media(media="print")
                     page.pdf(
                         path=str(pdf_path),
@@ -265,7 +258,7 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
 
                     deal_folder_id = find_or_create_deal_folder(
                         parent_folder_id=parent_folder_id,
-                        deal_id=listing_number,
+                        deal_id=canonical_external_id,
                         deal_title=title,
                     )
 
@@ -273,17 +266,17 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
 
                     pdf_drive_url = upload_pdf_to_drive(
                         local_path=str(pdf_path),
-                        filename=f"{listing_number}.pdf",
+                        filename=f"{canonical_external_id}.pdf",
                         folder_id=deal_folder_id,
                     )
 
                     record_deal_artifact(
                         conn=conn,
                         source=SOURCE,
-                        source_listing_id=listing_number,
-                        deal_id=deal["id"],
+                        source_listing_id=canonical_external_id,
+                        deal_id=row_id,
                         artifact_type="pdf",
-                        artifact_name=f"{listing_number}.pdf",
+                        artifact_name=f"{canonical_external_id}.pdf",
                         artifact_hash=pdf_hash,
                         drive_file_id=pdf_drive_url.split("/d/")[1].split("/")[0],
                         drive_url=pdf_drive_url,
@@ -294,34 +287,35 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                     pdf_path.unlink(missing_ok=True)
 
                     # -------------------------------
-                    # FINAL UPDATE
+                    # FINAL UPDATE (IDENTITY SAFE)
                     # -------------------------------
                     conn.execute(
                         """
                         UPDATE deals
-                        SET source_listing_id = ?,
-                            description = ?,
-                            location = ?,
-                            sector_raw = ?,
-                            industry = ?,
-                            sector = ?,
-                            sector_source = 'broker',
+                        SET
+                            canonical_external_id = ?,
+                            description           = ?,
+                            location              = ?,
+                            sector_raw            = ?,
+                            industry              = ?,
+                            sector                = ?,
+                            sector_source         = 'broker',
                             sector_inference_confidence = ?,
-                            sector_inference_reason = ?,
-                            asking_price_k = ?,
-                            ebitda_k = ?,
-                            notes = ?,
-                            pdf_drive_url = ?,
-                            drive_folder_id = ?,
-                            drive_folder_url = 'https://drive.google.com/drive/folders/' || ?,
-                            detail_fetched_at = ?,
-                            needs_detail_refresh = 0,
-                            last_updated = CURRENT_TIMESTAMP,
-                            last_updated_source = 'AUTO'
+                            sector_inference_reason     = ?,
+                            asking_price_k        = ?,
+                            ebitda_k              = ?,
+                            notes                 = ?,
+                            pdf_drive_url         = ?,
+                            drive_folder_id       = ?,
+                            drive_folder_url      = 'https://drive.google.com/drive/folders/' || ?,
+                            detail_fetched_at     = ?,
+                            needs_detail_refresh  = 0,
+                            last_updated          = CURRENT_TIMESTAMP,
+                            last_updated_source   = 'AUTO'
                         WHERE id = ?
                         """,
                         (
-                            listing_number,
+                            canonical_external_id,
                             description,
                             facts.get("location"),
                             facts.get("sector_raw"),
@@ -334,8 +328,9 @@ def enrich_transworld(limit: Optional[int] = None) -> None:
                             facts.get("notes"),
                             pdf_drive_url,
                             deal_folder_id,
+                            deal_folder_id,
                             fetched_at,
-                            deal["id"]
+                            row_id,
                         ),
                     )
                     conn.commit()

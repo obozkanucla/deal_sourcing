@@ -2,7 +2,8 @@
 * Axis Import & Enrichment OK (Note: no new enrichment was needed) (PS: We might want to enrich based on "UNDER OFFER" in the title)
 * BSR enrichment fixed
 * BusinessBuyers OK (to be tested in Prod)
-* B4S Generic
+* B4S Generic OK (to be tested in Prod)
+* B4S Vault OK (to be tested in Prod)
 * Daltons enrichment fixed
 🔴
 
