@@ -41,6 +41,13 @@ LOST_PHRASES = [
     "business has been sold",
     "opportunity withdrawn",
 ]
+# TODO [LIFECYCLE]:
+# BusinessBuyers Lost detection is phrase-based on raw HTML.
+# If false positives ever appear, tighten this to:
+# - structured page checks (h1/title)
+# - HTTP status codes
+# - broker-specific DOM markers
+
 repo = SQLiteRepository(Path("db/deals.sqlite"))
 
 

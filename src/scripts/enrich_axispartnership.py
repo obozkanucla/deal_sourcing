@@ -75,6 +75,21 @@ def clean_axis_title(title: str, listing_id: str | int) -> str:
 
     return title
 
+# TODO [LIFECYCLE]:
+# Axis listings sometimes declare "UNDER OFFER".
+# We intentionally do NOT map this to deal.status yet.
+#
+# Reason:
+# - "Under Offer" is non-terminal and potentially reversible
+# - Correct handling requires an explicit state machine
+# - Reversion rules (e.g. back to For Sale) are undefined
+#
+# Future work:
+# - Decide if "Under Offer" becomes a first-class status
+# - Define allowed transitions and irreversibility rules
+# - Decide whether/how re-enrichment can revert the state
+#
+# Until then, the signal is preserved in raw HTML / text only.
 
 def _extract_kpis(html: str) -> dict:
     """

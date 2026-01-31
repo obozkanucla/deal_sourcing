@@ -1,0 +1,21 @@
+* Abercorn Import & Enrichment OK (Note: no new enrichment was needed)
+* Axis Import & Enrichment OK (Note: no new enrichment was needed) (PS: We might want to enrich based on "UNDER OFFER" in the title)
+* BSR enrichment fixed
+* BusinessBuyers OK (to be tested in Prod)
+* B4S Generic
+* Daltons enrichment fixed
+🔴
+
+
+1401.8s failed enrich_dealopportunities.py
+266.8s ok enrich_hiltonsmythe.py
+192.5s ok enrich_axispartnership.py
+21.2s failed enrich_businesses4sale_generic.py
+18.1s ok enrich_businessbuyers.py
+11.6s ok enrich_businesses4sale_vault.py
+9.7s failed enrich_transworld.py
+6.3s failed enrich_knightsbridge.py
+1.2s ok enrich_abercorn.py
+0.5s ok enrich_daltons.py
+0.5s ok enrich_bsr.py
+

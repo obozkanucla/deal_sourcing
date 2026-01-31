@@ -181,9 +181,12 @@ def import_businesses4sale_search() -> None:
                 page_num += 1
                 time.sleep(SLEEP_BETWEEN_PAGES + random.random() * 2)
 
-        print(f"\n✅ DRY RUN COMPLETE — {len(listings)} net new listings")
-        if not DRY_RUN:
+        if DRY_RUN:
+            print(f"\n✅ DRY RUN COMPLETE — {len(listings)} net new listings (not persisted)")
+        else:
             conn.commit()
+            print(f"\n✅ IMPORT COMPLETE — {len(listings)} net new listings committed")
+
         conn.close()
         context.storage_state(path=STORAGE_STATE)
         browser.close()
