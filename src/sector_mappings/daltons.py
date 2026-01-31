@@ -5,6 +5,7 @@ DALTONS_SECTOR_MAP = {
     "business service franchises": "Business_Services",
     "corporate businesses": "Business_Services",
     "professional businesses": "Business_Services",
+    "cleaning businesses": "Business_Services",
 
     # --- Construction / built environment ---
     "construction businesses": "Construction_Built_Environment",
