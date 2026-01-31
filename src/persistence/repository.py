@@ -1122,7 +1122,7 @@ class SQLiteRepository:
                             needs_detail_refresh = 1
                          OR detail_fetched_at IS NULL
                       )
-                    ORDER BY source_listing_id;
+                    ORDER BY ASC;
                     """,
                     (source,),
                 ).fetchall()
