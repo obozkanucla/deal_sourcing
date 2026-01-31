@@ -67,4 +67,7 @@ DALTONS_SECTOR_MAP = {
     "other service businesses": "Other",
     "other retail businesses": "Other",
     "franchise resales businesses": "Franchise_Businesses",
+    "home based franchises": "Franchise_Businesses",
 }
+# TODO: Review unmapped Daltons breadcrumbs periodically and
+# promote stable ones into DALTONS_SECTOR_MAP
