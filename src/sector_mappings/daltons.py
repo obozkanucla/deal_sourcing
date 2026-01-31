@@ -72,4 +72,7 @@ DALTONS_SECTOR_MAP = {
 
 }
 # TODO: Review unmapped Daltons breadcrumbs periodically and
-# promote stable ones into DALTONS_SECTOR_MAP
+# TODO:
+# Children's activity / play / leisure businesses are mapped to
+# Consumer_Retail due to lack of a Leisure industry.
+# Revisit only if Consumer_Leisure is introduced.
