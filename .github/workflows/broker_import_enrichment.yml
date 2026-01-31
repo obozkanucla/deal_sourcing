@@ -118,15 +118,15 @@ jobs:
       # --------------------------------------------------
       # Phase 4b — Format Phase
       # --------------------------------------------------
-      - name: Sheets FORMAT phase (retry-safe)
-        run: |
-          set -e
-          for i in 1 2 3; do
-            echo "▶ FORMAT phase attempt $i"
-            SHEETS_PHASE=FORMAT python -m src.scripts.sync_to_sheets && exit 0
-            sleep $((i * 20))
-          done
-          exit 1
+#      - name: Sheets FORMAT phase (retry-safe)
+#        run: |
+#          set -e
+#          for i in 1 2 3; do
+#            echo "▶ FORMAT phase attempt $i"
+#            SHEETS_PHASE=FORMAT python -m src.scripts.sync_to_sheets && exit 0
+#            sleep $((i * 20))
+#          done
+#          exit 1
 
       # --------------------------------------------------
       # Persist canonical SQLite snapshot
