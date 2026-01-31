@@ -130,7 +130,7 @@ def is_bsr_sold_listing(soup: BeautifulSoup) -> bool:
 # MAIN
 # -------------------------------------------------
 MAX_RUNTIME_SECONDS = int(
-    os.getenv("MAX_RUNTIME_SECONDS", 85 * 60)
+    os.getenv("MAX_RUNTIME_SECONDS", 75 * 60)
 )
 
 def enrich_bsr(
