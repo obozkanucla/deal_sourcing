@@ -8,7 +8,7 @@ Contract:
 - Deduplicate via canonical_external_id
 - DRY_RUN supported
 """
-
+import os
 import csv
 import re
 import time
@@ -129,8 +129,16 @@ def is_bsr_sold_listing(soup: BeautifulSoup) -> bool:
 # -------------------------------------------------
 # MAIN
 # -------------------------------------------------
+MAX_RUNTIME_SECONDS = int(
+    os.getenv("MAX_RUNTIME_SECONDS", 85 * 60)
+)
 
-def enrich_bsr(limit: Optional[int] = None) -> None:
+def enrich_bsr(
+    limit: Optional[int] = None,
+    min_id: Optional[int] = None,
+) -> None:
+    job_started_at = time.time()
+
     print(f"📀 SQLite DB path: {DB_PATH}")
     print(f"🏷️ BSR enrichment starting | DRY_RUN={DRY_RUN}")
 
@@ -138,6 +146,8 @@ def enrich_bsr(limit: Optional[int] = None) -> None:
     conn = repo.get_conn()
 
     deals = repo.fetch_deals_for_enrichment(source=SOURCE)
+    if min_id is not None:
+        deals = [d for d in deals if d["id"] >= min_id]
     if limit:
         deals = deals[:limit]
 
@@ -170,6 +180,9 @@ def enrich_bsr(limit: Optional[int] = None) -> None:
 
         try:
             for i, deal in enumerate(deals, start=1):
+                if time.time() - job_started_at > MAX_RUNTIME_SECONDS:
+                    print("⏱️ Max runtime reached, exiting cleanly")
+                    break
                 url = deal["source_url"]
 
                 print(f"\n➡️ [{i}/{len(deals)}]")
